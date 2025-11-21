@@ -1,0 +1,159 @@
+#!/bin/bash
+# shellcheck shell=bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+
+function errexit() {
+    local err=$?
+    set +o xtrace
+    local code="${1:-1}"
+    echo "Error in ${BASH_SOURCE[1]}:${BASH_LINENO[0]}. '${BASH_COMMAND}' exited with status $err"
+    # Print out the stack trace described by $function_stack
+    if [ ${#FUNCNAME[@]} -gt 2 ]; then
+        echo "Call tree:"
+        for ((i = 1; i < ${#FUNCNAME[@]} - 1; i++)); do
+            echo " $i: ${BASH_SOURCE[$i + 1]}:${BASH_LINENO[$i]} ${FUNCNAME[$i]}(...)"
+        done
+    fi
+    echo "Exiting with status ${code}"
+    exit "${code}"
+}
+# trap ERR to provide an error handler whenever a command exits nonzero
+#  this is a more verbose version of set -o errexit
+trap 'errexit' ERR
+# setting errtrace allows our ERR trap handler to be propagated to functions,
+#  expansions and subshells
+set -eE -o pipefail -o errtrace
+
+# imporot common functions
+. ../files/.bashrc.d/02-functions
+
+# 定義顏色
+GREEN=$(tput setaf 2)
+YELLOW=$(tput setaf 3)
+RED=$(tput setaf 1)
+NC=$(tput sgr0)
+
+pass() {
+    echo -e "${GREEN}[PASS]${NC} $1"
+}
+
+change() {
+    echo -e "${YELLOW}[CHANGE]${NC} $1"
+}
+
+fail() {
+    echo -e "${RED}[FAIL]${NC} $1"
+}
+
+source /etc/lsb-release
+if [[ $DISTRIB_ID = LinuxMint ]] && [[ -f /etc/upstream-release/lsb-release ]]; then
+    # for Linux Mint, we treat it as Ubuntu
+    source /etc/upstream-release/lsb-release
+fi
+
+case $(uname) in
+    Linux)
+        platform='linux'
+        ;;
+    FreeBSD)
+        platform='freebsd'
+        ;;
+    Darwin)
+        platform='mac'
+        ;;
+    *)
+        # shellcheck disable=SC2034
+        platform='unknown'
+        ;;
+esac
+
+case $platform in
+    'linux')
+        check_pkg() { [[ "$(dpkg-query --show --showformat='${db:Status-Status}' "$1" 2>/dev/null)" = installed ]]; }
+        update_pkg_list() { sudo env "PATH=$PATH" apt update; }
+        # aptitude can solve depenency problem for clang-*, setup aptitude first
+        if ! check_pkg aptitude; then
+            sudo apt-get install -q -y aptitude
+        fi
+        ensure_pkg() {
+            change "Checking installation of: $*"
+            #shellcheck disable=SC2034
+            mapfile -t installed_pkgs < <(dpkg-query --show --showformat='${db:Status-Status} ${Package}\n' "$@" | grep ^installed | cut -d" " -f2)
+            pkgs_to_install=()
+            for pkg in "$@"; do
+                if ! array_contains installed_pkgs "$pkg"; then
+                    pkgs_to_install+=("$pkg")
+                fi
+            done
+
+            if [[ ${#pkgs_to_install[@]} -eq 0 ]]; then
+                pass "All packages are already installed"
+                return 0
+            fi
+
+            change "Installing missing packages: ${pkgs_to_install[*]}"
+            if ! sudo aptitude install -y "${pkgs_to_install[@]}"; then
+                fail "Failed to install packages: ${pkgs_to_install[*]}"
+                return 1
+            fi
+            pass "Successfully installed all packages"
+        }
+        ;;
+    'mac')
+        check_pkg() { brew list -1 | grep -q "^${1}\$"; }
+        update_pkg_list() { :; }
+        ensure_pkg() { brew install "$@"; }
+        if ! brew help >/dev/null; then
+            ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+        fi
+        ;;
+esac
+
+setup_script_output_prefix() {
+    caller=${BASH_SOURCE[2]##*/}
+    exec 5>&1
+    exec 1> >(sed -E "s#^#${YELLOW}[$caller]${NC} #" >&5)
+    exec 6>&2
+    exec 2> >(sed -E "s#^#${YELLOW}[$caller]${NC} #" >&6)
+}
+
+skip_script_if_executed() {
+    if [[ " $* " = *" -f "* ]]; then
+        change "Force setup enabled, executing..."
+        return
+    fi
+    caller=${BASH_SOURCE[2]##*/}
+    executed_ts=$(getfattr -n user.executed -d "${caller}" 0>/dev/null | sed -n 's/.*="\(.*\)"/\1/p' || echo "")
+    if [[ -z "${executed_ts}" ]]; then
+        change "Executing..."
+        return
+    fi
+    commonlib_ts=$(stat -c %Y "${BASH_SOURCE[1]}")
+    if ((executed_ts < commonlib_ts)); then
+        change "Common library updated, executing..."
+        return
+    fi
+    file_ts=$(stat -c %Y "${caller}")
+    if ((executed_ts > file_ts)); then
+        pass "Script already executed, skipping"
+        export skipped=1
+        exit
+    fi
+    change "Executing..."
+}
+
+mark_script_executed() {
+    caller=${BASH_SOURCE[2]##*/}
+    setfattr -n user.executed -v "$(date +%s)" "${caller}"
+}
+
+cleanup() {
+    if (($? == 0)) && [[ -z "${skipped}" ]]; then
+        mark_script_executed
+    fi
+}
+
+# shellcheck disable=SC2154
+trap 'status=$?; cleanup; exit $status' EXIT
+setup_script_output_prefix
+skip_script_if_executed "$@"

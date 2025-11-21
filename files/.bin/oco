@@ -1,0 +1,3 @@
+#!/bin/bash
+target=$(mise exec node@latest -- which oco)
+mise exec node@latest -- "$target" "$@"

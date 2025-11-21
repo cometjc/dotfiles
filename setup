@@ -1,0 +1,32 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+if [[ $EUID -eq 0 ]]; then
+    echo "This script must NOT be run as root" 1>&2
+    exit 1
+fi
+cd "$(dirname "$0")" || exit
+here=$(pwd)
+
+cd setup.d || exit 1
+if [[ " $* " == *" -f "* ]]; then
+    arg="--arg=-f"
+fi
+
+# shellcheck disable=SC2086
+run-parts --exit-on-error --regex='[0-9][0-9]-*' $arg .
+
+#######################
+## Local changes
+#######################
+# Setup self default using rebase when pull
+git config branch.master.rebase true
+
+# Daily Update dotfiles repo
+if ! (crontab -l | grep -q git_update_dotfiles.bash); then
+    crontab -l \
+        | {
+            cat
+            echo "@daily $here/git_update_dotfiles.bash"
+        } \
+        | crontab -
+fi

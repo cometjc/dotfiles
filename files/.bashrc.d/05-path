@@ -1,0 +1,13 @@
+#!/bin/bash
+#-------------------------------------------------------------
+# customize PATH
+#-------------------------------------------------------------
+
+PATH_append "$HOME/.local/bin"
+PATH_append "$HOME/.cargo/bin"              # rust
+PATH_append "${KREW_ROOT:-$HOME/.krew}/bin" # plugin manager for kubectl
+PATH_append "$HOME/bin/gam7"         # Google Apps Manager
+alias gam="$HOME/bin/gam7/gam"
+PATH_append "$HOME/.local/share/JetBrains/Toolbox/apps"
+PATH_append /usr/local/go/bin
+PATH_append /usr/local/bin

@@ -1,0 +1,40 @@
+# User service for Rclone mounting
+#
+# Place in ~/.config/systemd/user/
+# File must include the '@' (ex rclone@.service)
+# As your normal user, run
+#   systemctl --user daemon-reload
+# You can now start/enable each remote by using rclone@<remote>
+#   systemctl --user enable --now rclone@<remote>
+
+[Unit]
+Description=rclone: Remote FUSE filesystem for cloud storage config %i
+Documentation=man:rclone(1)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStartPre=-/bin/fusermount -u %h/mnt/%i
+ExecStartPre=-/usr/bin/mkdir -p %h/mnt/%i
+ExecStart= \
+  /usr/bin/rclone mount \
+    --config=%h/.config/rclone/rclone.conf \
+    --network-mode \
+    --vfs-cache-mode full \
+    --vfs-cache-max-age 8760h \
+    --vfs-cache-max-size 1G \
+    --fs-cache-expire-duration 8760h \
+    --fs-cache-expire-interval 8760h \
+    --use-server-modtime \
+    --buffer-size 16M \
+    --umask 022 \
+    --allow-other \
+    --use-mmap \
+    --drive-export-formats desktop \
+    %i: %h/mnt/%i
+#ExecStartPost=/usr/bin/rclone rc vfs/refresh recursive=true --rc-addr 127.0.0.1:5575 _async=true
+ExecStop=/bin/fusermount -u %h/mnt/%i
+
+[Install]
+WantedBy=default.target

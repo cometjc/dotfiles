@@ -1,0 +1,18 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+eval "$("$HOME/.local/bin/mise" activate bash)"
+mise use --global node@latest node@20
+
+mise use -g npm:@openai/codex
+mise exec node@latest -- npm update -g npm
+mise exec node@latest -- npm install -g @commitlint/{cli,config-conventional,load} opencommit
+mise exec node@latest -- npm install -g task-master-ai

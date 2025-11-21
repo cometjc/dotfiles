@@ -1,0 +1,5 @@
+bind main T !git tag %(prompt) %(commit)
+bind main R !git rebase --autostash -i %(commit)^
+bind diff R !git rebase --autostash -i %(commit)^
+set commit-order = date
+set main-view-id = yes

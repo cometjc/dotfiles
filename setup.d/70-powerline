@@ -1,0 +1,33 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+uv tool install --with powerline-gitstatus powerline-status -p 3.8
+
+# Setup  https://github.com/powerline/fonts
+mkdir -p ~/.local/share/fonts/
+(
+    cd ~/.local/share/fonts/
+    if [[ -f PowerlineSymbols.otf ]]; then
+        ts_flag=(-z PowerlineSymbols.otf)
+    fi
+    curl -fL "${ts_flag[@]}" -o PowerlineSymbols.otf https://github.com/powerline/powerline/raw/develop/font/PowerlineSymbols.otf
+)
+mkdir -p ~/.config/fontconfig/conf.d/
+(
+    cd ~/.config/fontconfig/conf.d/
+    if [[ -f 10-powerline-symbols.conf ]]; then
+        ts_flag=(-z 10-powerline-symbols.conf)
+    fi
+    curl -fL "${ts_flag[@]}" -o 10-powerline-symbols.conf https://github.com/powerline/powerline/raw/develop/font/10-powerline-symbols.conf
+)
+
+# patch fonts for powerline
+fc-cache -vf ~/.local/share/fonts/ ~/.fonts

@@ -1,0 +1,33 @@
+# terminfo and termcap for nice 256 color terminal
+# allow bold colors - necessary for some reason
+attrcolor b ".I"
+attrcolor i "+b"
+# tell screen how to set colors. AB = background, AF=foreground
+termcapinfo * 'Co#256:AB=\033[48;5;%dm:AF=\033[38;5;%dm'
+# erase background with current bg color
+defbce "on"
+
+# tell screen itself not to use the alternate screen
+termcapinfo xterm* ti@:te@
+
+# special xterm hardstatus: use the window title.
+#termcapinfo xterm 'hs:ts=\E]2;:fs=\007:ds=\E]2;screen\007'
+#caption always "%{= bw} %-Lw%{= Bw}%n%f %t%{-}%+Lw %=%{= bY}@%H%{= bR} %l %{-}%{= KG} %Y-%m-%d %D %0c:%s %{-} "
+#shelltitle ">| bash"
+startup_message off
+#hardstatus on
+defscrollback 10000
+bindkey "[D" prev  # ctrl-left
+bindkey "[C" next  # ctrl-right
+bindkey "[1;5D" prev  # ctrl-left
+bindkey "[1;5C" next  # ctrl-right
+#bindkey "[A" focus up
+#bindkey "[B" focus down
+
+pow_detach_msg "Screen session of \$LOGNAME \$:cr:\$:nl:ended."
+
+hardstatus alwayslastline
+hardstatus string '%{= kG} %H [%{= kw}%= %-Lw%{ck}(%n*%f%t%?(%u)%?)%{-}%+Lw %=%{-}] %{Y}%l %{W}%m/%d %0c '
+vbell off
+
+#screen -t htop  0 sh -c "htop"

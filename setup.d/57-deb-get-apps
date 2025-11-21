@@ -1,0 +1,23 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+if ! command -v deb-get &>/dev/null; then
+    change "deb-get not found. Installing..."
+    curl -sL https://raw.githubusercontent.com/wimpysworld/deb-get/main/deb-get | sudo -E bash -s install deb-get
+fi
+if ! command -v dbeaver-ce &>/dev/null; then
+    change "dbeaver-ce not found. Installing..."
+    sudo deb-get install dbeaver-ce
+else
+    sudo deb-get upgrade --dg-only
+fi
+
+rm -f wget-log*

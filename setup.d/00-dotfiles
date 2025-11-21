@@ -1,0 +1,31 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+#######################
+## Backup dotfiles and replace with link
+#######################
+
+find -L ~ -maxdepth 1 -type l -delete -print
+unset GREP_OPTIONS
+if [[ -d ~/.config && ! -L ~/.config ]]; then
+    change "Merge ~/.config with files/.config"
+    rsync --ignore-existing -av ~/.config/ ../files/.config/
+    rm -rvf ~/.config
+fi
+
+while read -r src; do
+    target="$HOME/$(basename "$src")"
+    if [[ "$(realpath "$target")" -ef "$src" ]]; then
+        pass "$target -> $src"
+    else
+        change "$(ln -sfv "$src" ~/ 2>&1)"
+    fi
+done < <(find "$(realpath -L ../files/)" -maxdepth 1 -mindepth 1)

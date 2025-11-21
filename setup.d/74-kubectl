@@ -1,0 +1,34 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+if [[ ! -f /etc/apt/keyrings/kubernetes-apt-keyring.gpg ]]; then
+    curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+    sudo chmod 644 /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+fi
+if [[ ! -f /etc/apt/sources.list.d/kubernetes.list ]]; then
+    echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+    sudo chmod 644 /etc/apt/sources.list.d/kubernetes.list
+fi
+apt-update-smart
+ensure_pkg kubectl
+
+# https://krew.sigs.k8s.io/docs/user-guide/setup/install/
+# Krew is the plugin manager for kubectl command-line tool.
+(
+    set -x
+    cd "$(mktemp -d)" \
+        && OS="$(uname | tr '[:upper:]' '[:lower:]')" \
+        && ARCH="$(uname -m | sed -e 's/x86_64/amd64/' -e 's/\(arm\)\(64\)\?.*/\1\2/' -e 's/aarch64$/arm64/')" \
+        && KREW="krew-${OS}_${ARCH}" \
+        && curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/latest/download/${KREW}.tar.gz" \
+        && tar zxvf "${KREW}.tar.gz" \
+        && ./"${KREW}" install krew
+)

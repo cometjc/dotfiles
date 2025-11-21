@@ -1,0 +1,27 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+ignore = [
+    "W293", # blank line contains whitespace
+    "RUF003",
+]
+select = [
+    "I",  # isort
+    "UP", # pyupgrade
+    "E",
+    "W",  # pycodestyle (PEP8)
+    "F",  # Pyflakes
+    "ASYNC",  # flake8-async:             A flake8 plugin that checks for bad async / asyncio practices.
+    "B",      # flake8-bugbear:           finding likely bugs and design problems in your program.
+    "A",      # flake8-builtins:          Check for python builtins being used as variables or parameters.
+    "C4",     # flake8-comprehensions:    helps you write better list/set/dict comprehensions.
+    "PT",     # flake8-pytest-style:      checking common style issues or inconsistencies with pytest-based tests.
+    "RET",    # flake8-return:            checks return values
+    "RUF",    # Ruff-specific rules
+]
+
+[tool.ruff.format]
+preview = true
+

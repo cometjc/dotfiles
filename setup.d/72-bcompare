@@ -1,0 +1,22 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+sudo curl \
+    -z /etc/apt/trusted.gpg.d/DEB-GPG-KEY-scootersoftware.asc \
+    -o /etc/apt/trusted.gpg.d/DEB-GPG-KEY-scootersoftware.asc \
+    https://www.scootersoftware.com/DEB-GPG-KEY-scootersoftware.asc
+sudo curl \
+    -z /etc/apt/sources.list.d/scootersoftware.list \
+    -o /etc/apt/sources.list.d/scootersoftware.list \
+    https://www.scootersoftware.com/scootersoftware.list
+
+update_pkg_list
+ensure_pkg bcompare

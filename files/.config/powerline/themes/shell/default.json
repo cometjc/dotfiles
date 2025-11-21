@@ -1,0 +1,28 @@
+{
+  "cursor_space": 50,
+  "segments": {
+    "above": [
+      {
+        "left": [
+          { "function": "powerline.segments.shell.mode" },
+          {
+            "function": "powerline.segments.common.net.hostname",
+            "args": {
+              "only_if_ssh": true
+            },
+            "priority": 10
+          },
+          { "function": "powerline.segments.common.env.virtualenv", "priority": 50 },
+          { "function": "powerline_gitstatus.gitstatus", "priority": 40 },
+          { "function": "powerline.segments.shell.last_status", "priority": 10 }
+        ],
+        "right": [ ]
+      }
+    ],
+    "left": [
+      { "function": "powerline.segments.shell.cwd", "priority": 10, "args": { "dir_shorten_len": 0, "dir_limit_depth": 10, "use_path_separator": true } },
+      { "function": "powerline.segments.shell.mode" }
+    ],
+    "right": [ ]
+  }
+}

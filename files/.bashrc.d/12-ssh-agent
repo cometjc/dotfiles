@@ -1,0 +1,50 @@
+#!/bin/bash
+# $Id$
+#
+# Limitations: if $ssh_auth_sock exists and an ssh-agent is running
+# which doesn't use it, ssh-reclaim will be tricked into thinking
+# that they correspond. This will happen if the computer shuts down
+# uncleanly.
+#
+# Possible workarounds:
+# * Check the command line of ssh-agent to see if we started it
+# * Check for ssh sockets in /tmp owned by $USER
+
+# Colors
+YELLOW=$(tput setaf 3)
+BLUE=$(tput setaf 4)
+DEFAULT=$(tput sgr0)
+
+start_agent() {
+    eval "$(ssh-agent -s -a "$ssh_auth_sock" &)" >/dev/null
+    if [ -t 0 ]; then
+        echo " ${BLUE}*${DEFAULT} New agent started (pid ${SSH_AGENT_PID})"
+        echo
+    fi
+}
+
+# Start ssh-agent
+if [ -t 0 ]; then
+    echo
+    echo " ${BLUE}*${DEFAULT} Starting ssh-agent..."
+fi
+ssh_agent_pid=$(pgrep -u "$USER" ssh-agent | cut -d' ' -f1 | tr '\n' ' ')
+ssh_auth_sock=$HOME/.ssh/agent-auth-sock-$(uname -n)
+if [ -z "$ssh_agent_pid" ]; then
+    rm -f "$ssh_auth_sock"
+    start_agent
+else
+    if [ -e "$ssh_auth_sock" ]; then
+        if [ -t 0 ]; then
+            echo " ${BLUE}*${DEFAULT} Agent found (pid $ssh_agent_pid)"
+            echo
+        fi
+        export SSH_AUTH_SOCK=$ssh_auth_sock SSH_AGENT_PID=$ssh_agent_pid
+    else
+        if [ -t 0 ]; then
+            echo " ${YELLOW}*${DEFAULT} Killing stale agent (pid $ssh_agent_pid)"
+        fi
+        pkill -u "$USER" ssh-agent
+        start_agent
+    fi
+fi

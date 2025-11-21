@@ -1,0 +1,98 @@
+[alias]
+	amend-to = "!f() { SHA=`git rev-parse \"$1\"`; git commit --fixup \"$SHA\" && GIT_SEQUENCE_EDITOR=true git rebase --autostash --interactive --autosquash \"$SHA^\";}; f"
+	br = branch
+	ci = commit --verbose
+	co = checkout
+	d = difftool
+	gr = "log --graph --pretty=format:'%C(red)%h%C(reset)%x09 %C(yellow)%d%C(reset) %s %C(green)(%cr) %C(bold blue)<%an>%C(reset)' --abbrev-commit --date=relative"
+	json = log --format='{ \"hashes\":{ \"commit\":\"%H\", \"tree\":\"%T\", \"parents\":\"%P\" }, \"author\":{ \"date\": \"%ai\", \"name\": \"%an\", \"email\":\"%ae\" }, \"committer\":{ \"date\": \"%ci\", \"name\": \"%cn\", \"email\":\"%ce\" } }'
+	last = !git --no-pager gr -20
+	root = rev-parse --show-superproject-working-tree --show-toplevel
+	st = status
+	unstage = reset HEAD --
+[branch]
+	autosetuprebase = always
+[cola]
+	spellcheck = true
+[color]
+	branch = auto
+	diff = auto
+	interactive = auto
+	status = auto
+	ui = true
+[core]
+	attributesfile = ~/.gitattributes
+	autocrlf = input
+	editor = vim
+	excludesfile = ~/.gitignore_global
+#	pager = delta
+	preloadindex = true
+	whitespace = cr-at-eol
+[credential]
+	helper = cache --timeout=86400
+[diff]
+	algorithm = histogram
+	renames = true
+	submodule = log
+	tool = bc
+[diff "tar-gz"]
+    binary = true
+    textconv = tar -tvzf
+[filter "gitconfig"]
+[filter "vimrc"]
+	clean = sed /LOCAL_SCRIPTS_START/,/LOCAL_SCRIPTS_END/d
+[git-up "fetch"]
+	all = true
+	prune = true
+[git-up "rebase"]
+	arguments = --rerere-autoupdate
+[include]
+	path = ~/.gitconfig_local
+[init]
+	templatedir = ~/.git-templates
+	defaultBranch = main
+[merge]
+	conflictStyle = zdiff3
+	tool = meld
+[mergetool]
+	keepBackup = false
+[mergetool "meld"]
+	cmd = meld "$LOCAL" "$MERGED" "$REMOTE" --output "$MERGED"
+[mergetool "bc"]
+	trustExitCode = true
+[difftool "bc"]
+	trustExitCode = true
+[push]
+	default = current
+[rebase]
+	instructionFormat = "[%an @ %ar] %s"
+[rerere]
+	autoupdate = true
+	enabled = 1
+#[sequence]
+#	editor = interactive-rebase-tool
+[status]
+	submoduleSummary = false
+[alias]
+	auto-mr = "!f() { \
+		main_branch=`git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@'`; \
+		echo \"Creating merge request for branch $main_branch\"; \
+		git config --local --unset-all push.pushOption; \
+		git config --local --add push.pushOption \"merge_request.create\"; \
+		git config --local --add push.pushOption \"merge_request.target=$main_branch\"; \
+		git config --local --add push.pushOption \"merge_request.merge_when_pipeline_succeeds\"; \
+		git config --local --add push.pushOption \"merge_request.remove_source_branch\"; \
+		}; f"
+	dunk = !git diff | dunk
+[fetch]
+	prune = true
+#[interactive]
+#	diffFilter = delta --color-only
+[delta]
+	navigate = true
+	side-by-side = true
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true

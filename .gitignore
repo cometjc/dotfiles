@@ -1,0 +1,23 @@
+*~
+*.pyc
+# ignore local setting
+/.gitconfig
+
+*.pyc
+*.tags
+/tags
+/files/.bashrc.d/bashrc_local
+/files/.bashrc.d/local_env
+/files/.config/.gitignore
+/files/.fonts/.uuid
+/files/.local/share
+/files/.vim/.netrwhist
+/files/.vim/autoload/plug.vim.old
+/files/.vim/plugged/
+
+
+
+# ignore ansible temprary file
+/site.retry
+/.opencommit-commitlint
+/.env-store*

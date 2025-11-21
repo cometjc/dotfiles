@@ -1,0 +1,36 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+setup_tailscale() {
+    if [[ "$platform" != linux ]]; then
+        return
+    fi
+    if ! command -v tailscale &>/dev/null; then
+        curl -fsSL https://tailscale.com/install.sh | sh
+    fi
+    # https://tailscale.com/kb/1320/performance-best-practices
+    NETDEV=$(ip -o route get 8.8.8.8 | cut -f 5 -d " ")
+    sudo ethtool -K "$NETDEV" rx-udp-gro-forwarding on rx-gro-list off
+
+    line=$(printf '#!/bin/sh\n\nethtool -K %s rx-udp-gro-forwarding on rx-gro-list off \n' "$(ip -o route get 8.8.8.8 | cut -f 5 -d " ")")
+    target=/etc/networkd-dispatcher/routable.d/50-tailscale
+    if ! [[ -f "$target" ]] || ! grep -qF "$line" "$target" >/dev/null; then
+        echo "$line" | sudo tee "$target"
+        sudo chmod 755 "$target"
+    fi
+    # Check if the script works
+    if ! sudo /etc/networkd-dispatcher/routable.d/50-tailscale; then
+        echo 'An error occurred.'
+        false
+    fi
+}
+
+setup_tailscale

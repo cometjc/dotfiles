@@ -1,0 +1,23 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+find /sys/fs/bcache/ -mindepth 1 -maxdepth 1 -type d | while read -r cache; do
+    sudo bash -v -c "\
+        echo 0 > '$cache/congested_read_threshold_us'
+        echo 0 > '$cache/congested_write_threshold_us'\
+        "
+done
+
+find /sys/block -maxdepth 1 -name 'bcache*' -type l | while read -r bcache; do
+    sudo bash -v -c "\
+        echo 0 > '$bcache/bcache/writeback_percent'\
+        "
+done

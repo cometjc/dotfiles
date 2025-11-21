@@ -1,0 +1,86 @@
+#!/bin/bash
+
+_beep_sound=$(realpath "$(dirname "${BASH_SOURCE[0]}")")/.15-complete.oga
+
+_beep() {
+    #paplay "$_beep_sound" --volume=60000
+    AUDIODRIVER=alsa play -q -n synth pl G2 pl B2 pl D3 pl G3 pl D4 pl G4 delay 0.3 .35 .4 .45 .5 .55 remix - fade q .6 3 1.5 vol 0.5
+}
+
+command_timer_stop() {
+    local previous_exit_status=$1
+    local execution_time=$(($(date +%s) - last_command_ts))
+    local str_dur=""
+    # snooze if the terminal is using and command success
+    if ((previous_exit_status == 0 && execution_time < 5)); then
+        return
+    fi
+    # Print on error or session is not input (idle/waiting result)
+    local hours=$((execution_time / 3600))
+    local mins=$(((execution_time % 3600) / 60))
+    local secs=$((execution_time % 60))
+    if ((execution_time >= 3600)); then
+        str_dur=$(printf "%02g:%02g:%02g" $hours $mins $secs)
+    elif ((execution_time >= 60)); then
+        str_dur=$(printf "%02g:%02g" $mins $secs)
+    else
+        str_dur=$(printf "%s sec" $secs)
+    fi
+
+    # If the terminal supports less than 8 colors, don't use color codes
+    local ncolors
+    ncolors=$(tput colors 2>/dev/null)
+    if [[ ${ncolors:=0} -ge 8 ]]; then
+        GREEN=$(
+            tput sgr0
+            tput setaf 2
+        )
+        GREEN_BG=$(
+            tput sgr0
+            tput setab 2
+        )
+        RED=$(
+            tput sgr0
+            tput setaf 1
+        )
+        RED_BG=$(
+            tput sgr0
+            tput setab 1
+        )
+        RESET=$(tput sgr0)
+    fi
+    if [[ $previous_exit_status -eq 0 ]]; then
+        echo -e "⏰ ${GREEN}CMD ${GREEN_BG} $last_command ${GREEN} succed in ${str_dur}${RESET}"
+    else
+        echo -e "⏰ ${RED}CMD ${RED_BG} $last_command ${RED} exit ${RED_BG} ${previous_exit_status} ${RED} in ${str_dur}${RESET}"
+    fi
+
+    (_beep &)
+}
+
+command_tracking_start() {
+    if [[ "$PROMPT_COMMAND" == *"$BASH_COMMAND"* || "$BASH_SUBSHELL" != 0 ]]; then
+        return
+    fi
+    # shellcheck disable=SC2034
+    last_command=${BASH_COMMAND}
+    last_command_ts=$(date +%s)
+}
+
+command_tracking_end() {
+    local previous_exit_status=$?
+    if [[ -n "$last_command" ]]; then
+        command_timer_stop $previous_exit_status
+        unset last_command
+        unset last_command_ts
+    else
+        previous_exit_status=0
+    fi
+    return $previous_exit_status
+}
+
+if [[ $- =~ .*i.* ]]; then
+    while trap -p | grep -q command_tracking_start; do trap - DEBUG; done
+    trap 'command_tracking_start' DEBUG
+    _add_prompt_command append "command_tracking_end"
+fi

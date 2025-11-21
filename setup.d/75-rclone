@@ -1,0 +1,39 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+version=$(rclone --version 2>/dev/null | head -n 1)
+current_version=$(curl -fsS https://downloads.rclone.org/version.txt)
+
+if [[ "$version" == "$current_version" ]]; then
+    pass "rclone is already the latest version"
+else
+    change "Install / update rclone"
+    curl https://rclone.org/install.sh | sudo bash
+fi
+
+if grep -q '^user_allow_other' /etc/fuse.conf; then
+    pass "user_allow_other is already set in /etc/fuse.conf"
+else
+    change 'add "user_allow_other" to /etc/fuse.conf'
+    echo "user_allow_other" | sudo tee -a /etc/fuse.conf
+fi
+
+# run `rclone rc --rc-addr :5575 vfs/refresh recursive=true` every 6 hours
+refresh_cmd="rclone rc --rc-addr :5575 vfs/refresh recursive=true"
+if crontab -l | grep -q "$refresh_cmd"; then
+    pass "rclone refresh cron job is already set"
+else
+    change "add rclone refresh cron job"
+    (
+        crontab -l 2>/dev/null
+        echo "0 */6 * * * $refresh_cmd"
+    ) | crontab -
+fi

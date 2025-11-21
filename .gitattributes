@@ -1,0 +1,11 @@
+*.sh text eol=lf
+*.vimrc text eol=lf
+/bashrc text eol=lf
+/vimrc filter=vimrc
+/gitconfig filter=gitconfig
+*.ttc filter=lfs diff=lfs merge=lfs -text
+*.otf filter=lfs diff=lfs merge=lfs -text
+.gitconfig filter=ignore-safe
+files/.bin/mc filter=lfs diff=lfs merge=lfs -text
+/.env filter=sanitize-env
+files/.gitconfig filter=sanitize-gitconfig

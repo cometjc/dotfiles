@@ -1,0 +1,6 @@
+#!/bin/bash
+for site in "$@"; do
+    ssh "$site" dpkg -l | sort -k2,2 >"/tmp/$site.dpkg"
+done
+vimdiff /tmp/*.dpkg
+rm -f /tmp/*.dpkg

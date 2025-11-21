@@ -1,0 +1,303 @@
+#!/bin/bash
+#===============================================================
+#
+# ALIASES AND FUNCTIONS
+#
+# Arguably, some functions defined here are quite big.
+# If you want to make this file smaller, these functions can
+# be converted into scripts and removed from here.
+#
+# Many functions were taken (almost) straight from the bash-2.04
+# examples.
+#
+#===============================================================
+
+#-------------------
+# Personnal Aliases
+#-------------------
+
+# util wraps
+ssh() {
+    if [ -n "$TMUX" ]; then
+        tmux rename-window "$(echo "$@" | rev | cut -d ' ' -f1 | rev | cut -d . -f 1)"
+        command ssh "$@"
+        tmux set-window-option automatic-rename "on" 1>/dev/null
+    else
+        LC_ALL=en_US.UTF-8 command ssh "$@"
+    fi
+}
+
+sshfs() {
+    if [[ ! -d "$2" ]]; then
+        mkdir -vp "$2"
+    fi
+    command sshfs "$@" \
+        -o transform_symlinks \
+        -o dir_cache=yes \
+        -o dcache_max_size=10000 \
+        -o dcache_timeout=86400 \
+        -o max_conns=12 \
+        -o ServerAliveInterval=15 \
+        -o reconnect
+}
+
+alias mv='mv -i'
+alias mkdir='mkdir -p'
+alias grep='grep --color=auto --binary-files=without-match'
+alias du='du -kh' # Makes a more readable output.
+
+# Custom Commands
+alias aa='vim ~/.bashrc && source ~/.bashrc'
+alias an='source ~/.bashrc'
+# shellcheck disable=SC2139
+alias as="vim \"${BASH_SOURCE[0]}\" && source ~/.bashrc"
+alias h='history'
+alias ivm='vim'
+alias j='jobs -l'
+alias libpath='echo -e ${LD_LIBRARY_PATH//:/\\n}'
+alias path='echo -e ${PATH//:/\\n}'
+alias tt='tmux -u -2 new -D -A -s main'
+alias wt='curl "v2.wttr.in/新莊區?1p&lang=zh-tw"'
+alias zz='vim ~/.vimrc'
+
+# dynamic dots
+dots=".."
+target="cd .."
+for _ in $(seq 1 10); do
+    # shellcheck disable=SC2139
+    alias "$dots=$target"
+    dots+="."
+    target+="/.."
+done
+unset dots target
+
+# become_sem_ver: 2.1.1-R1
+mk256() {
+    if [[ -n "$1" ]]; then
+        sha256sum "$1" >"$1".sha256
+    fi
+}
+
+#-------------------------------------------------------------
+# The 'ls' family (this assumes you use a recent GNU ls)
+#-------------------------------------------------------------
+if [[ $(uname) == 'Linux' ]]; then
+    alias ls='ls -h -F --color=auto'
+else
+    alias ls='ls -AhG'
+fi
+alias sl='ls'
+alias l="ls -l"
+alias ll="ls -l"
+alias la='ls -a'       # show hidden files
+alias lla='ls -la'     # show hidden files
+alias lk='ls -lSr'     # sort by size, biggest last
+alias lc='ls -ltcr'    # sort by and show change time, most recent last
+alias lu='ls -ltur'    # sort by and show access time, most recent last
+alias lt='ls -ltr'     # sort by date, most recent last
+alias lm='ls -l |more' # pipe through 'more'
+alias lr='ls -lR'      # recursive ls
+
+#-------------------------------------------------------------
+# Git alias
+#-------------------------------------------------------------
+alias add='git add'
+alias br='git branch --sort=-committerdate -vv'
+alias bra='br -a'
+
+alias ci='git commit --verbose'
+alias cii='git update-index --again "$(git rev-parse --show-toplevel)" && git commit --amend --no-edit'
+alias cia='git commit --amend --no-edit'
+alias xclip="xclip -selection c"
+
+fixup() {
+    if [[ $# -eq 0 ]]; then
+        git update-index --again "$(git rev-parse --show-toplevel)"
+    else
+        git add "$@"
+    fi
+    if [[ $(git diff --name-only --cached | wc -l) -ne 0 ]]; then
+        git commit --amend --no-edit
+    fi
+}
+alias co='git checkout --recurse-submodules'
+complete -F _complete_alias co
+
+alias cs='git checkout $(__git_refs | percol)'
+alias gd='git diff'
+alias gdd='git diff | dunk'
+alias gr=$'git log --graph --pretty=format:\'%Cred%h%Creset%x09%C(yellow) %d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset\' --abbrev-commit --date=relative'
+alias gra='gr --all'
+
+alias gre='git remote'
+alias st='git status'
+alias gcp='git cherry-pick'
+alias gcpc='git cherry-pick --continue'
+alias gp='git push --force-with-lease --recurse-submodules=on-demand'
+alias gu='git up'
+alias gm='git merge'
+alias gmt='git mergetool'
+alias grc='git rebase --continue || git status'
+alias grs='git rebase --skip'
+alias gsu='git submodule update --force --init'
+
+alias guptag='git tag -l | xargs git tag -d && git fetch'
+# shellcheck disable=SC2154
+alias gltag='git for-each-ref refs/tags/ --format "%(objecttype) %(refname:short)" |  while read ty name; do [[ $ty = commit ]] && echo $name; done'
+alias gva='(builtin \cd $(git rev-parse --show-toplevel); vim $(git status --porcelain | grep ^.M | sed -ne "s#.* ##p"))'
+
+gttouch() {
+    tag=$1
+    GIT_COMMITTER_DATE="$(git show "$tag" --format=%aD | head -1)"
+    export GIT_COMMITTER_DATE
+    git tag -a -m "$tag" -f "$tag" "$tag"
+}
+alias gt='git tag'
+gtup() {
+    git tag -f "$1" "$2"
+    git push -f origin "$1"
+}
+gtrm() {
+    git tag -d "$1"
+    git push -d origin "$1"
+}
+gtmv() {
+    git tag "$2" "$1"
+    git tag -d "$1"
+    git push -d origin "$1" &
+    git push origin "$2" &
+    wait
+}
+gbrm() {
+    git branch -D "$1"
+    git push -d origin "$1"
+}
+gbmv() {
+    git branch -m "$1" "$2"
+    git push -d origin "$1" &
+    git push origin "$2" &
+}
+gbr2tag() {
+    for br; do
+        git branch -D "$br"
+        git tag "$br" origin/"$br"
+        git push -d origin "$br"
+        git push origin "$br"
+    done
+}
+
+githook() {
+    repo_root=$(git rev-parse --show-toplevel)
+    (
+        cd "$repo_root/.git" || return
+        mkdir -p hooks
+        src=$(realpath "$HOME/.git-templates/hooks/prepare-commit-msg")
+        target=hooks/prepare-commit-msg
+        if [[ -f $target ]] && [[ $(realpath "$target") != "$src" ]]; then
+            echo "$(realpath "$target") != $src"
+            rm -vf "$target"
+        fi
+        if [[ ! -f "$target" ]]; then
+            ln -fvs "$src" "$target"
+        fi
+    )
+}
+
+alias tig='tig --stat=$COLUMNS'
+
+# 取得相對於 repo_root 的路徑
+get_repo_relative_path() {
+    # 用法: get_repo_relative_path REPO_ROOT INPUT_PATH
+    local repo_root="$1"
+    local input="$2"
+    local relative
+
+    # INPUT_PATH 可能情況：
+    # 1. 絕對路徑
+    # 2. 相對路徑於當前目錄
+    # 3. 相對路徑於 repo_root
+    for candidate in "$input" "$PWD/$input" "$repo_root/$input"; do
+        if ! abs_candidate=$(realpath -s -e "$candidate" 2>/dev/null); then
+            continue
+        fi
+        if [[ "$abs_candidate" == "$repo_root"* ]]; then
+            relative="/${abs_candidate#"$repo_root"/}"
+            echo "$relative"
+            return 0
+        fi
+    done
+
+    # 若上述邏輯未涵蓋，則回傳原始輸入內容
+    echo "$input"
+}
+
+# gitignore 函式，將指定路徑逐一轉換為相對於 repo_root 的路徑，並加入到 .git/info/exclude
+gitignore() {
+    if [ $# -eq 0 ]; then
+        echo "Usage: gitignore <path> [<path> ...]"
+        return 1
+    fi
+
+    # 取得 Git 專案根目錄
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    if [ -z "$repo_root" ]; then
+        echo "錯誤：目前目錄不在 Git 專案中。"
+        return 1
+    fi
+
+    exclude_file="$repo_root/.git/info/exclude"
+    # 確保 exclude 檔案存在
+    mkdir -p "$(dirname "$exclude_file")"
+    touch "$exclude_file"
+
+    for input in "$@"; do
+        # 取得以 repo_root 為基準之相對路徑格式
+        new_pattern=$(get_repo_relative_path "$repo_root" "$input")
+
+        # 檢查該忽略規則是否已存在於 exclude 檔案中
+        if grep -Fxq "$new_pattern" "$exclude_file"; then
+            echo "規則 '$new_pattern' 已存在於 $exclude_file"
+        else
+            echo "$new_pattern" >>"$exclude_file"
+            echo "已將規則 '$new_pattern' 以相對於 repo_root 的格式加入到 $exclude_file:"
+            echo "  $new_pattern"
+        fi
+    done
+}
+
+#-------------------------------------------------------------
+# Search Code
+#-------------------------------------------------------------
+#
+alias ag='ag --hidden --ignore=.git --ignore=tags --ignore="*~"'
+vag() {
+    if [[ $1 == -rn ]]; then
+        shift
+    fi
+    tmp=$(mktemp)
+    ag --hidden --ignore .git/ --ignore .tags --ignore "*~" --vimgrep "$*" >"$tmp"
+    vim -c "cfile $tmp" -c "1bd"
+    rm -f "$tmp"
+}
+
+#-------------------------------------------------------------
+# Admin assistant
+#-------------------------------------------------------------
+alias aptup='sudo apt-get update && sudo apt-get dist-upgrade --auto-remove --purge -f -y'
+function myip() {
+    dig +short myip.opendns.com @resolver1.opendns.com
+    ip -4 -br addr show
+}
+
+#-------------------------------------------------------------
+# Docker
+#-------------------------------------------------------------
+alias dclean='docker ps -a -q|xargs -r docker rm; docker images -q -f dangling=true|xargs -r docker rmi; docker volume ls -qf dangling=true|xargs -r docker volume rm'
+alias dt='docker run --rm -v /var/run/docker.sock:/var/run/docker.sock nate/dockviz images -t'
+alias dr='docker run'
+alias dp='docker push'
+alias dip='docker inspect --format "{{.NetworkSettings.IPAddress}}"'
+alias rmi='docker rmi'
+alias k9s='LC_ALL=C \k9s'
+
+complete -F _complete_alias "${!BASH_ALIASES[@]}"

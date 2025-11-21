@@ -1,0 +1,21 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+eval "$("$HOME/.local/bin/mise" activate bash)"
+mise use --global go@1.23
+eval "$("$HOME/.local/bin/mise" activate bash)"
+
+go install github.com/BurntSushi/toml/cmd/tomlv@master
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+go install golang.org/x/tools/cmd/goimports@latest
+go install mvdan.cc/sh/v3/cmd/shfmt@latest
+go install github.com/nao1215/gup@latest
+gup update || true

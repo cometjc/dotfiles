@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# ==============================================================================
+# Clean up gitconfig filter
+# ==============================================================================
+clean_gitconfig_filter_fn() {
+    # Create a temporary file
+    tmpfile=$(mktemp)
+
+    # Save stdin to temporary file
+    cat >"$tmpfile"
+
+    # Process the file - remove scalar and maintenance sections
+    if [[ -s "$tmpfile" ]]; then
+        for section in scalar maintenance safe; do
+            # Find and remove the section
+            section_keys=$(git config --file "$tmpfile" --get-regexp "^$section\.")
+            if [[ -n "$section_keys" ]]; then
+                git config --file "$tmpfile" --remove-section "$section"
+            fi
+        done
+
+        # Output the cleaned file to stdout
+        cat "$tmpfile"
+    fi
+
+    # Remove temporary file
+    rm -f "$tmpfile"
+}
+
+# Define the clean filter
+gitconfig_clean_filter="env -i bash -c '$(declare -f clean_gitconfig_filter_fn); clean_gitconfig_filter_fn'"
+
+# Set up the git filter if not already configured
+if [[ $(git config --get filter.sanitize-gitconfig.clean) != "$gitconfig_clean_filter" ]]; then
+    echo "Configuring git filter for files/.gitconfig"
+    git config filter.sanitize-gitconfig.clean "$gitconfig_clean_filter"
+fi
+
+# Set up gitattributes if needed
+if ! grep "^files/.gitconfig" .gitattributes &>/dev/null; then
+    echo "files/.gitconfig filter=sanitize-gitconfig" >>.gitattributes
+fi

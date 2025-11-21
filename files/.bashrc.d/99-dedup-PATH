@@ -1,0 +1,2 @@
+#!/bin/bash
+PATH="$(echo "$PATH" | tr ':' '\n' | awk '!x[$0]++' | paste -sd ":" -)"

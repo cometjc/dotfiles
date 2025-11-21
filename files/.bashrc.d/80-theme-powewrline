@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# $HOME/.local/bin/powerline-shell -> $HOME/.local/share/uv/tools/powerline-shell/bin/powerline-shell
+
+load_powerline() {
+    # shellcheck disable=SC2154
+    if ! [[ $(who am i) =~ \([0-9a-z.\-]+\)$ || "$platform" == "mac" || "$platform" == "linux" || "$TMUX" != "" || "$SUDO_USER" != "" ]]; then
+        return
+    fi
+    powerline_env=$(dirname "$(realpath "$(which powerline-daemon)")")
+    python="$powerline_env/python"
+    PATH="$PATH:$($python -c "import sysconfig; print(sysconfig.get_path('scripts'))")"
+    mapfile -t sites < <($python -c 'import site; print(" ".join(site.getsitepackages()))')
+    sites=(/usr/share "${sites[@]}")
+    local powerline=""
+    for site in "${sites[@]}"; do
+        check_file="$site/powerline/bindings/bash/powerline.sh"
+        if [ -f "$check_file" ]; then
+            powerline="$check_file"
+            break
+        fi
+    done
+    if [[ -z "$powerline" ]]; then
+        echo "Powerline not found"
+        return
+    fi
+
+    echo "Powerline found at $powerline"
+    powerline-daemon -q || true
+    # shellcheck disable=SC2034
+    POWERLINE_BASH_CONTINUATION=1
+    # shellcheck disable=SC2034
+    POWERLINE_BASH_SELECT=1
+    # shellcheck source=/dev/null
+    source "$powerline"
+    # append a command at the last line, inside curly brackets  of function _powerline_prompt
+    patch_function _powerline_prompt 'echo -n " "'
+}
+
+load_powerline

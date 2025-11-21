@@ -1,0 +1,21 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+[[ "$DISTRIB_ID" != Ubuntu ]] && exit
+command -v flatpak &>/dev/null || sudo apt-get install -y flatpak
+
+flatpak install -y org.telegram.desktop
+flatpak install -y com.ticktick.TickTick
+flatpak install -y flathub org.keepassxc.KeePassXC
+flatpak --user override --filesystem=/usr/share/icons:ro
+for path in ~/Documents/ ~/Downloads/ ~/Music/ ~/Pictures/ ~/Videos/; do
+    flatpak --user override --filesystem="$path"
+done

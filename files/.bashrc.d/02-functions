@@ -1,0 +1,162 @@
+#!/bin/bash
+
+ifs_restore() {
+    if [[ -n "${IFS_backup+x}" ]]; then
+        IFS=$IFS_backup
+    else
+        unset IFS
+    fi
+}
+
+ifs_wrapper() {
+    function_to_call=$1
+    shift
+    # shellcheck disable=SC2034
+    local -n ifs_wrapper_array_name=$1
+    shift
+    # choose a special character that is not in the arguments to use as IFS
+    local i=2
+    # shellcheck disable=SC2059
+    choose_ifs=$(printf "\\$(printf %03o "$i")")
+    while [[ "$*" =~ $choose_ifs ]]; do
+        ((i++))
+        if ((i > 126)); then
+            echo "No more special characters available, ifs_wrapper failed" >&2
+            return 1
+        fi
+        # shellcheck disable=SC2059
+        choose_ifs=$(printf "\\$(printf %03o "$i")")
+    done
+    [[ -n "${IFS+x}" ]] && local IFS_backup=$IFS
+    trap 'ifs_restore; trap - RETURN' RETURN
+    IFS="$choose_ifs"
+
+    "$function_to_call" ifs_wrapper_array_name "$@"
+}
+
+_array_contains() {
+    local -n _array_contains_array_name=$1
+    local search_value=$2
+    [[ "$IFS${_array_contains_array_name[*]}$IFS" =~ ${IFS}${search_value}${IFS} ]]
+}
+
+array_contains() {
+    # shellcheck disable=SC2034
+    local -n array_contains_array_name=$1
+    local search_value=$2
+
+    ifs_wrapper _array_contains array_contains_array_name "$search_value"
+}
+
+_array_remove() {
+    local -n _array_remove_array_name=$1
+    local search_value=$2
+    elm_string="$IFS${_array_remove_array_name[*]}$IFS"
+    elm_string="${elm_string//$IFS$search_value$IFS/$IFS}"
+    # string first and last $IFS
+    elm_string="${elm_string##"$IFS"}"
+    elm_string="${elm_string%%"$IFS"}"
+    # shellcheck disable=SC2206
+    _array_remove_array_name=($elm_string)
+
+}
+
+array_remove() {
+    # shellcheck disable=SC2034
+    local -n array_remove_array_name=$1
+    local search_value=$2
+    ifs_wrapper _array_remove array_remove_array_name "$search_value"
+}
+
+PATH_prepend() {
+    if [[ -d "$1" ]]; then
+        local PATH_prepend_path_array
+        IFS=':' read -r -a PATH_prepend_path_array <<<"$PATH"
+        array_remove PATH_prepend_path_array "$1"
+        PATH_prepend_path_array=("$1" "${PATH_prepend_path_array[@]}")
+        local IFS=":"
+        PATH="${PATH_prepend_path_array[*]}"
+    fi
+
+}
+
+PATH_append() {
+    if [[ -d "$1" ]]; then
+        array_remove PATH_append_path_array "$1"
+        PATH="${PATH:+"$PATH:"}$1"
+    else
+        echo "PATH_append: $1 is not a directory"
+    fi
+}
+
+patch_function() {
+    local func_name=$1
+    local append_line=$2
+
+    # 取得原始函數定義
+    local original_function
+    original_function=$(declare -f "$func_name")
+
+    # 檢查是否已經包含要附加的行
+    if [[ $original_function != *"$append_line"* ]]; then
+        # 在結束大括號前附加新行
+        eval "$(echo "$original_function" | sed -e "/^}$/i$append_line")"
+    fi
+}
+
+# 定義一個函數來切換（抑制或恢復）指定的函數，並設置 umask
+toggle_function() {
+    local func_name=$1
+    local toggle_file="/tmp/${func_name}_toggle"
+    local original_umask
+    original_umask="$(umask)"
+
+    # 設置 umask 0077 來保護文件
+    umask 0077
+
+    if declare -f "$func_name" >/dev/null; then
+        if [ -f "$toggle_file" ]; then
+            # 如果 toggle_file 存在，則恢復函數
+            eval "$(cat "$toggle_file")"
+            rm "$toggle_file"
+            echo "函數 '$func_name' 已恢復。"
+        else
+            # 如果 toggle_file 不存在，則抑制函數
+            local func_def
+            func_def=$(declare -f "$func_name")
+            echo "$func_def" >"$toggle_file"
+            eval "$func_name() { :; }"
+            echo "函數 '$func_name' 已被抑制。"
+        fi
+    else
+        echo "函數 '$func_name' 不存在。"
+    fi
+
+    # 恢復原始 umask
+    umask "$original_umask"
+}
+
+# 添加 Bash 命令補全功能
+_toggle_function_completions() {
+    tput sc
+    #local cur_word="${COMP_WORDS[COMP_CWORD]}"
+    local functions_list
+    mapfile -t functions_list < <(declare -F | awk '{print $3}')
+
+    # 使用 percol 讓使用者選擇函數
+    local selected_function
+    selected_function="$(printf "%s\n" "${functions_list[@]}" | percol)"
+    # 將選擇的函數作為補全結果
+    COMPREPLY=("$selected_function")
+    tput rc
+}
+
+repeat() {
+    count=$1
+    shift
+    for _ in $(seq "$count"); do
+        "$@"
+    done
+}
+
+complete -F _toggle_function_completions toggle_function

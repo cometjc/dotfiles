@@ -1,0 +1,10 @@
+--- /usr/share/cinnamon/js/ui/appSwitcher/appSwitcher.js.bak	2024-11-12 16:29:56.575831928 +0800
++++ /usr/share/cinnamon/js/ui/appSwitcher/appSwitcher.js	2024-11-12 16:30:01.287865928 +0800
+@@ -63,6 +63,7 @@
+         windows.push(windowActors[i].get_meta_window());
+
+     windows = windows.filter(Main.isInteresting);
++    windows = windows.filter(w => w.get_monitor() === global.screen.get_current_monitor())
+
+     switch (binding.get_name()) {
+         case 'switch-panels':

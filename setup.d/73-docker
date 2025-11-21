@@ -1,0 +1,34 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+sudo apt-get remove docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc -y
+apt-update-smart
+ensure_pkg ca-certificates curl
+if [[ ! -f /etc/apt/keyrings/docker.asc ]]; then
+    sudo install -m 0755 -d /etc/apt/keyrings
+    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
+fi
+
+if [[ ! -f /etc/apt/sources.list.d/docker.list ]]; then
+    DISTRIB_CODENAME=$(lsb_release -cs)
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+        $DISTRIB_CODENAME stable" \
+        | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+fi
+
+apt-update-smart
+ensure_pkg docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+if [[ ! "$(getent group docker)" =~ $USER ]]; then
+    change "Add $USER to docker group"
+    sudo usermod -aG docker "$USER"
+fi

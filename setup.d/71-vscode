@@ -1,0 +1,26 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+ensure_pkg curl gpg apt-transport-https
+target=/etc/apt/keyrings/packages.microsoft.gpg
+if [[ ! -f "$target" ]]; then
+    curl -sSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor >packages.microsoft.gpg
+    sudo install -D -o root -g root -m 644 packages.microsoft.gpg "$target"
+    rm -f packages.microsoft.gpg
+fi
+
+CONFIG="deb [arch=amd64,arm64,armhf signed-by=/etc/apt/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main"
+if ! grep -Fq "$CONFIG" /etc/apt/sources.list.d/vscode.list; then
+    echo "$CONFIG" | sudo tee /etc/apt/sources.list.d/vscode.list >/dev/null
+    apt-update-smart
+fi
+
+ensure_pkg code

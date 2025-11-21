@@ -1,0 +1,28 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+#######################
+## install vim plugins manager
+#######################
+mkdir -p ~/.backup
+if [[ ! -d ~/.vim/autoload ]]; then
+    mkdir -p ~/.vim/autoload
+fi
+(
+    cd ~/.vim/autoload
+    [[ -f plug.vim ]] || curl -fLo plug.vim https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+)
+
+#######################
+## install vim plugins
+#######################
+vim +PlugInstall +qall
+find "$HOME/.vim/" -name \*.vim -exec dos2unix -q {} \;

@@ -1,0 +1,68 @@
+#!/bin/bash
+export -a chpwd_functions
+
+# https://github.com/rvm/rvm/blob/master/scripts/extras/bash_zsh_support/chpwd/function.sh
+__zsh_like_cd()
+{
+  \typeset __zsh_like_cd_hook
+  if
+    builtin "$@"
+  then
+    for __zsh_like_cd_hook in chpwd "${chpwd_functions[@]:-}"
+    do
+      if \typeset -f "$__zsh_like_cd_hook" >/dev/null 2>&1
+      then "$__zsh_like_cd_hook" || break # finish on first failed hook
+      fi
+    done
+    true
+  else
+    return $?
+  fi
+}
+
+# https://github.com/rvm/rvm/blob/master/scripts/extras/bash_zsh_support/chpwd/load.sh
+[[ -n "${ZSH_VERSION:-}" ]] ||
+{
+  cd()    { __zsh_like_cd cd    "$@" ; }
+  popd()  { __zsh_like_cd popd  "$@" ; }
+  pushd() { __zsh_like_cd pushd "$@" ; }
+}
+
+# Add to HOOK the given FUNCTION.
+# With -d, remove the function from the hook instead; delete the hook
+# variable if it is empty.
+
+
+add-hook() {
+  local -a hooktypes
+  hooktypes=( chpwd )
+  local usage="Usage: add-hook [-d] hook function\nValid hooks are:\n  ${hooktypes[*]}"
+  local remove=0
+  local hooktype
+  local func
+
+  if [[ "$1" == "-d" ]]; then
+    remove=1
+    shift
+  fi
+  hooktype=$1
+  func=$2
+
+  if ! array_contains hooktypes "$hooktype"; then
+    echo "$usage" >&2
+    return 1
+  fi
+
+  local hookfuncs="${hooktype}_functions"
+  if [[ $remove -eq 0 ]]; then
+    if array_contains "$hookfuncs" "$func"; then
+      echo "Function $func already in hook $hooktype"
+      return 0
+    fi
+    eval "$hookfuncs+=(\"$func\")"
+  else
+    array_remove "$hookfuncs" "$func"
+  fi
+}
+
+echo "${chpwd_functions[@]}"

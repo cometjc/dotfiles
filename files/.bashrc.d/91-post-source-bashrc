@@ -1,0 +1,10 @@
+#!/bin/bash
+for rc in ~/.bashrc_local /etc/bash.bashrc; do
+  if [[ -f $rc ]]; then
+    echo "[Source] $rc"
+    # shellcheck disable=SC1090
+    source "$rc"
+  else
+    echo "[Skip] $rc"
+  fi
+done

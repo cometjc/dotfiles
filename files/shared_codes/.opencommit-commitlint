@@ -1,0 +1,30 @@
+{
+  "hash": "4ca6d1334ad72d3313fe24e4fa2d8da47910a42a923f67bc2cd158b5cdc5b367",
+  "prompts": [
+    "There should always be a blank line at the beginning of the body.",
+    "Each line of the body should always have 35 characters or less.",
+    "There should always be a blank line at the beginning of the footer.",
+    "Each line of the footer should always have 35 characters or less.",
+    "The header should always have 35 characters or less.",
+    "The header should always be trimmed of whitespace.",
+    "The subject should never be in one of the following case:\n  - sentence-case\n  - start-case\n  - pascal-case\n  - upper-case.",
+    "The subject should never be empty.",
+    "The subject should never end with '.'.",
+    "The type should always be in lower-case case.",
+    "The type should never be empty.",
+    "The type should always be one of the following values:\n  - featuring (A new feature)\n  - fixing (A bug fix)\n  - documenting (Documentation only changes)\n  - styling (Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc))\n  - refactoring (A code change that neither fixes a bug nor adds a feature)\n  - testing (Adding missing tests or correcting existing tests)\n  - chores (Other changes that don't modify src or test files)\n  - perf (A code change that improves performance)\n  - build (Changes that affect the build system or external dependencies (example scopes: gulp, broccoli, npm))\n  - ci (Changes to our CI configuration files and scripts (example scopes: Travis, Circle, BrowserStack, SauceLabs))\n  - revert (Reverts a previous commit).",
+    "The body should always have 300 characters or less.",
+    "The body should never be empty.",
+    "The scope should never be empty."
+  ],
+  "consistency": {
+    "繁體中文": {
+      "commitMessage": "修正(server.ts)：將端口變數從小寫端口改為大寫PORT\n功能(server.ts)：新增對process.env.PORT環境變數的支援\n\n現在port變數已更名為PORT，以符合命名慣例，因為PORT是一個常量。支援環境變數可以使應用程序更靈活，因為它現在可以通過process.env.PORT環境變數運行在任何可用端口上。",
+      "config": {
+        "OCO_OMIT_SCOPE": false,
+        "OCO_DESCRIPTION": true,
+        "OCO_EMOJI": false
+      }
+    }
+  }
+}

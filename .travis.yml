@@ -1,0 +1,20 @@
+---
+language: python
+
+cache:
+  apt: true
+  pip: true
+  directories:
+    - /var/cache/apt/archives
+    - $HOME/.cache/pip
+matrix:
+  include:
+    - os: linux
+      dist: precise
+      sudo: required
+    - os: linux
+      dist: trusty
+      sudo: required
+    - os: osx
+
+script: ./setup_dotfiles.bash

@@ -1,0 +1,126 @@
+#!/bin/bash
+SOURCES_LIST="/etc/apt/sources.list"
+XATTR_META="user.apt_meta"
+UPDATE_INTERVAL=86400 # 1 day in seconds
+
+if [[ ! $0 = *apt-update-smart ]] && [ "$1" != "update" ]; then
+    # get command path from second path search result
+    cmd=$(which -a "${0##*/}" | awk 'NR==2{print $0}')
+    exec "$cmd" "$@"
+fi
+# 檢查必要檔案和權限
+if [ ! -f "$SOURCES_LIST" ]; then
+    echo "Error: $SOURCES_LIST not found" >&2
+    return 1
+fi
+if [ ! -d "/etc/apt/sources.list.d" ]; then
+    echo "Error: /etc/apt/sources.list.d not found" >&2
+    return 1
+fi
+
+# 取得或更新 metadata (format: timestamp;content:hash;file1:hash;file2:hash)
+get_meta() {
+    getfattr -n "$XATTR_META" "$SOURCES_LIST" 2>/dev/null | grep -o '".*"' | tr -d '"' || echo ""
+}
+save_meta() {
+    if ! sudo setfattr -n "$XATTR_META" -v "$1" "$SOURCES_LIST"; then
+        echo "Error: Failed to save metadata" >&2
+        return 1
+    fi
+}
+get_hash() {
+    if [ ! -f "$1" ]; then
+        echo "Error: File not found - $1" >&2
+        return 1
+    fi
+    sha256sum "$1" 2>/dev/null | cut -d' ' -f1 || echo ""
+}
+
+# 建立當前狀態的 metadata
+curr_meta="$(date +%s)"
+
+# 收集所有當前的 list 檔案路徑
+declare -A current_files
+mapfile -d $'\0' -t files < <(find /etc/apt -name "*.list" -print0)
+for file in "${files[@]}"; do
+    [[ ! -f "$file" ]] && continue
+    file_hash=$(get_hash "$file") || continue
+    current_files["$file"]="$file_hash"
+    curr_meta+=";$file:$file_hash"
+done
+
+# 分析變更
+changes=()
+
+check_update() {
+    old_meta=$(get_meta)
+    old_time=$(echo "$old_meta" | cut -d';' -f1)
+    # 時間檢查
+    if [ -z "$old_time" ]; then
+        changes+=("初始化")
+        return
+    fi
+    if (($(date +%s) - old_time > UPDATE_INTERVAL)); then
+        changes+=("更新間隔超過 1 天")
+        return
+    fi
+
+    # 檔案變更檢查
+    if [ -z "$old_meta" ]; then
+        changes+=("初始化")
+        return
+    fi
+
+    # 建立舊檔案的 hash map
+    mapfile -d ";" -t old_meta <<<"$old_meta;"
+    declare -A old_files
+    for entry in "${old_meta[@]}"; do
+        [[ -z "$entry" ]] && continue
+        [[ ! "$entry" = *:* ]] && continue
+        old_file=${entry%:*}
+        old_hash=${entry#*:}
+        old_files["$old_file"]="$old_hash"
+    done
+
+    # 比對檔案變更
+    for file in "${!current_files[@]}"; do
+        if [ -n "${old_files[$file]}" ]; then
+            # 檔案存在，檢查 hash 是否變更
+            if [ "${current_files[$file]}" != "${old_files[$file]}" ]; then
+                changes+=("變更: $file [${old_files[$file]}] -> [${current_files[$file]}]")
+            fi
+            unset "old_files[$file]"
+        else
+            # 新檔案
+            changes+=("新增: $file")
+        fi
+    done
+
+    # 剩下在 old_files 中的就是被刪除的檔案
+    for file in "${!old_files[@]}"; do
+        changes+=("刪除: $file")
+    done
+}
+
+# 執行更新
+if [[ ${#changes[@]} -eq 0 ]]; then
+    echo "SKIP: same repo configs & last update within 1 day"
+    exit
+fi
+
+echo "變更摘要："
+printf '%s\n' "${changes[@]}"
+
+# 更換鏡像站
+#for list_file in "${!current_files[@]}"; do
+#    sudo sed -i 's/archive.ubuntu.com\|security.ubuntu.com/free.nchc.org.tw/' "$list_file"
+#done
+
+# 確保 apt update 成功執行
+if ! sudo "$0" update; then
+    echo "Error: apt update failed" >&2
+    return 1
+fi
+
+# 儲存新的 metadata
+save_meta "$curr_meta" || return 1

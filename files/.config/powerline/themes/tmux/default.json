@@ -1,0 +1,21 @@
+{
+  "spaces": 0,
+  "dividers": {
+    "left": {
+      "hard": "",
+      "soft": ""
+    },
+    "right": {
+      "hard": " ",
+      "soft": " "
+    }
+  },
+  "segments": {
+    "right": [
+      {
+        "function": "powerline.segments.common.sys.system_load",
+        "priority": 50
+      }
+    ]
+  }
+}

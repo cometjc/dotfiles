@@ -1,0 +1,40 @@
+[global_config]
+  suppress_multiple_term_dialog = True
+  always_split_with_profile = True
+  putty_paste_style = True
+[keybindings]
+  zoom_in = <Primary>plus
+  zoom_out = <Primary>underscore
+  zoom_normal = <Primary>0
+  zoom_in_all = <Primary>KP_Add
+  zoom_out_all = <Primary>KP_Subtract
+  zoom_normal_all = <Primary>KP_0
+  go_up = ""
+  go_down = ""
+  go_left = ""
+  go_right = ""
+  resize_left = ""
+  resize_right = ""
+  help = ""
+[profiles]
+  [[default]]
+    audible_bell = True
+    visible_bell = True
+    background_color = "#282828"
+    font = Source Code Pro Medium 16
+    foreground_color = "#ebdbb2"
+    palette = "#282828:#cc241d:#98971a:#d79921:#458588:#b16286:#689d6a:#a89984:#928374:#fb4934:#b8bb26:#fabd2f:#83a598:#d3869b:#8ec07c:#ebdbb2"
+    word_chars = "-,./?%&#:_~"
+    use_system_font = False
+    bold_is_bright = True
+    copy_on_selection = True
+[layouts]
+  [[default]]
+    [[[window0]]]
+      type = Window
+      parent = ""
+    [[[child1]]]
+      type = Terminal
+      parent = window0
+      profile = default
+[plugins]

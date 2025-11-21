@@ -1,0 +1,46 @@
+#!/bin/bash
+# ssh-copy-id-sudo: like ssh-copy-id but copy public key to root space
+# usage: ssh-copy-id-sudo user@host
+
+setup_root_ssh() {
+    # Extract the username and hostname
+    USER_HOST="$1"
+    HOSTNAME=$(echo "$USER_HOST" | cut -d'@' -f2)
+
+    # Copy the SSH public key using ssh and sudo to append it to the root's authorized_keys
+    # Only if it's not already present
+    ssh -t "$USER_HOST" "sudo sh -c '\
+        mkdir -p /root/.ssh && \
+        touch /root/.ssh/authorized_keys && \
+        chmod 600 /root/.ssh/authorized_keys && \
+        grep -q -F \"$PUB_KEY\" /root/.ssh/authorized_keys || echo \"$PUB_KEY\" >> /root/.ssh/authorized_keys \
+        '"
+
+    # Check if the SSH key was successfully processed
+    ssh -O exit root@"$HOSTNAME" &>/dev/null
+    if ssh -q root@"$HOSTNAME" exit; then
+        echo "SSH key successfully processed for $HOSTNAME root."
+    else
+        echo "Failed to process SSH key for $HOSTNAME root."
+    fi
+}
+
+if [[ "$#" -eq 0 ]]; then
+    echo "Usage: $0 user@hostname user@hostname2 ..."
+    exit 1
+fi
+
+export PUB_KEY
+if [[ -f "$HOME/.ssh/id_ed25519.pub" ]]; then
+    PUB_KEY=$(cat "$HOME/.ssh/id_ed25519.pub")
+elif [[ -f "$HOME/.ssh/id_rsa.pub" ]]; then
+    PUB_KEY=$(cat "$HOME/.ssh/id_rsa.pub")
+else
+    echo "No public key found in ~/.ssh/ to copy to $USER_HOST."
+    exit 1
+fi
+
+while [[ $# -ge 1 ]]; do
+    setup_root_ssh "$1"
+    shift
+done

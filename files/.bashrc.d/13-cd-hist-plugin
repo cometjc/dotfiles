@@ -1,0 +1,55 @@
+#!/bin/bash
+
+export cdhist_file="$HOME/.cd_history"
+
+touch "$cdhist_file"
+
+IFS=:
+if [[ ! ":${chpwd_functions[*]}:" =~ :append_cdhist: ]]; then
+    chpwd_functions+=(append_cdhist)
+fi
+unset IFS
+
+append_cdhist() {
+    real_dir=$(realpath "$PWD" 2>/dev/null || echo "$PWD")
+    echo "$real_dir" >>"$cdhist_file"
+}
+
+cleanup_cdhist() {
+    # Check if lock file exists and is older than 300 seconds
+    if [[ -f "$cdhist_file.lock" ]]; then
+        lock_age=$(($(date +%s) - $(stat -c %Y "$cdhist_file.lock")))
+        if ((lock_age > 300)); then
+            message="Warning: cdhist lock file is older than 300 seconds"
+            tmux list-clients -F "#{client_name}" 2>/dev/null | xargs -I{} tmux display-message -c {} "$message" 2>/dev/null
+            rm -f "$cdhist_file.lock"
+        fi
+    fi
+    # remove duplicates and non-existing directories
+    (
+        flock --nonblock 9 || exit 1
+        tac "$cdhist_file" |
+            awk '!x[$0]++' |
+            while read -r line; do
+                real_line=$(timeout 0.5 realpath "$line" 2>/dev/null || echo "$line")
+                timeout 0.5 test -d "$real_line" && echo "$real_line"
+            done |
+            tac |
+            sponge "$cdhist_file"
+    ) 9>"$cdhist_file.lock"
+}
+
+cd_widget() {
+    # quick dedup filtering on load
+    cd_target="$(tac "$cdhist_file" | awk '!x[$0]++' | sed -e "s@^$HOME@~@" | tac | percol --prompt-bottom --result-bottom-up --reverse)"
+    if ((${#cd_target} != 0)); then
+        # shellcheck disable=SC2164
+        cd "${cd_target/#\~/$HOME}"
+    fi
+
+    # cleanup history in background
+    (cleanup_cdhist &)
+}
+
+# if this is interactive shell, then bind hstr to Alt-s (for Vi mode check doc)
+if [[ $- =~ .*i.* ]]; then bind -x '"\es": "cd_widget"'; fi

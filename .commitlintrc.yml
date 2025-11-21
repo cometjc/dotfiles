@@ -1,0 +1,92 @@
+extends:
+  - '@commitlint/config-conventional'
+rules:
+  body-leading-blank:
+    - 2
+    - always
+  body-max-length:
+    - 2
+    - always
+    - 300
+  body-max-line-length:
+    - 2
+    - always
+    - 80
+  footer-leading-blank:
+    - 2
+    - always
+  header-max-length:
+    - 2
+    - always
+    - 80
+  subject-case:
+    - 2
+    - never
+    - - sentence-case
+      - start-case
+      - pascal-case
+      - upper-case
+  subject-empty:
+    - 2
+    - never
+  subject-full-stop:
+    - 2
+    - never
+    - .
+  type-case:
+    - 2
+    - always
+    - lower-case
+  type-empty:
+    - 2
+    - never
+  type-enum:
+    - 2
+    - always
+    - - featuring
+      - fixing
+      - documenting
+      - styling
+      - refactoring
+      - testing
+      - chores
+      - perf
+      - build
+      - ci
+      - revert
+  body-empty:
+    - 2
+    - never
+  scope-empty:
+    - 2
+    - never
+prompt:
+  questions:
+    type:
+      description: Select the type of change that you're committing
+      enum:
+        featuring:
+          description: A new feature
+        fixing:
+          description: A bug fix
+        documenting:
+          description: Documentation only changes
+        styling:
+          description: >-
+            Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
+        refactoring:
+          description: A code change that neither fixes a bug nor adds a feature
+        perf:
+          description: A code change that improves performance
+        testing:
+          description: Adding missing tests or correcting existing tests
+        build:
+          description: >-
+            Changes that affect the build system or external dependencies (example scopes: gulp, broccoli, npm)
+        ci:
+          description: >-
+            Changes to our CI configuration files and scripts (example scopes: Travis, Circle, BrowserStack, SauceLabs)
+        chores:
+          description: Other changes that don't modify src or test files
+        revert:
+          description: Reverts a previous commit

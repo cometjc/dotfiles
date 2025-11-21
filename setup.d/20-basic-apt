@@ -1,0 +1,99 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+#######################
+## install packages on new machine
+#######################
+
+packages=()
+
+case $platform in
+    'linux')
+        # Add Git PPA if not already present
+        if ! find /etc/apt/sources.list.d/ -name 'git-core-ubuntu-ppa-*.list'; then
+            sudo add-apt-repository -y ppa:git-core/ppa
+        fi
+
+        # Define Linux-specific packages
+        packages+=(
+            # shell tools
+            hstr
+            vim
+            wget
+            curl
+            parallel
+            pv
+            flocks
+            entr       # required by tmux plugins (tpm)
+            util-linux # flock
+            # Filesystem tools
+            cifs-utils
+            plocate
+            silversearcher-ag
+            sshfs
+            sshpass
+            autofs
+            iotop
+            # Services
+            openssh-server
+            # Shell and system admin tools
+            apt-file
+            bmon
+            htop
+            jq
+            yq
+            lnav
+            moreutils
+            ncdu
+            # Development tools
+            build-essential
+            cmake
+            direnv
+            dos2unix
+            exuberant-ctags
+            git
+            git-delta
+            git-lfs
+            zlib1g-dev # for mise ruby build
+            meld
+            pipx
+            shellcheck
+            tig
+            unzip
+            # Terminal
+            fonts-firacode
+            terminator
+            tmux
+            # GUI
+            flameshot
+            xclip
+            remmina remmina-plugin-rdp
+            xdotool # cursor-autopilot
+            # Mint clipboard manager
+            copyq
+        )
+        ;;
+    'mac')
+        # Define macOS-specific packages
+        packages+=(
+            coreutils
+            ctags
+            curl
+            dos2unix
+            git
+            python
+            wget
+        )
+        ;;
+esac
+
+# Install all packages
+ensure_pkg "${packages[@]}"

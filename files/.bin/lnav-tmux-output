@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# $HOME/bin/lnav-tmux-output
+
+file=$(mktemp).sh
+tmux capture-pane -epS -32768 >"$file"
+tmux new-window -n:tmux-hist "lnav $file"

@@ -1,0 +1,36 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+if [[ "$platform" == linux ]]; then
+    # set moving window to Super+click
+    gsettings set org.cinnamon.desktop.wm.preferences mouse-button-modifier '<Super>'
+    gsettings set org.gnome.desktop.wm.preferences focus-new-windows 'smart'
+
+    # start fcitx5 on login
+    if [[ -f /usr/share/applications/org.fcitx.Fcitx5.desktop ]]; then
+        mkdir -p ~/.config/autostart
+        ln -sf /usr/share/applications/org.fcitx.Fcitx5.desktop ~/.config/autostart
+    fi
+    # linuxmint/cinnamon: Option for Alt-Tab switcher to list windows on current monitor only
+    patch_script="$(dirname "$(realpath "$0")")/scripts/apply-appswitcher-patch.sh"
+    chmod +x "$patch_script"
+
+    $patch_script
+
+    # Set up post-install hook for cinnamon-common
+    if [[ -d /etc/apt/apt.conf.d/ ]] && [[ ! -f /etc/apt/apt.conf.d/99cinnamon-patch ]]; then
+        change "安裝 cinnamon-common 升級後自動修補。"
+        sudo mkdir -p /etc/apt/apt.conf.d
+        echo 'DPkg::Post-Invoke {"'"$patch_script"' || true"};' | sudo tee /etc/apt/apt.conf.d/99cinnamon-patch
+        sudo chown root:root /etc/apt/apt.conf.d/99cinnamon-patch
+        sudo chmod 644 /etc/apt/apt.conf.d/99cinnamon-patch
+    fi
+fi

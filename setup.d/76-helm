@@ -1,0 +1,22 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+if [[ ! -f /usr/share/keyrings/helm.gpg ]]; then
+    ensure_pkg curl apt-transport-https
+    curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg >/dev/null
+fi
+
+REPO_LINE="deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main"
+if ! grep -q -F "$REPO_LINE" /etc/apt/sources.list.d/helm-stable-debian.list; then
+    echo "$REPO_LINE" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+fi
+apt-update-smart
+ensure_pkg helm
