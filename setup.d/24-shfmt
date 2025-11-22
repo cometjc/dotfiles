@@ -1,0 +1,71 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+#######################
+## Install/Update shfmt
+#######################
+
+case $platform in
+    'linux')
+        ensure_pkg curl
+        ARCH=$(dpkg --print-architecture)
+        case $ARCH in
+            amd64) SHFMT_ARCH="amd64" ;;
+            arm64) SHFMT_ARCH="arm64" ;;
+            armhf) SHFMT_ARCH="arm" ;;
+            *)
+                fail "Unsupported architecture: $ARCH"
+                return 1
+                ;;
+        esac
+
+        # Get latest version from GitHub API
+        SHFMT_VERSION=$(curl -fsSL https://api.github.com/repos/mvdan/sh/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        if [[ -z "$SHFMT_VERSION" ]]; then
+            fail "Failed to get shfmt version"
+            return 1
+        fi
+
+        # Check current version if installed
+        CURRENT_VERSION=""
+        if command -v shfmt &>/dev/null; then
+            CURRENT_VERSION=$(shfmt --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+            if [[ "$CURRENT_VERSION" == "$SHFMT_VERSION" ]]; then
+                pass "shfmt is already up to date ($CURRENT_VERSION)"
+                exit 0
+            fi
+            change "Updating shfmt from $CURRENT_VERSION to $SHFMT_VERSION"
+        else
+            change "Installing shfmt $SHFMT_VERSION"
+        fi
+
+        # Download and install
+        DOWNLOAD_URL="https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION#v}_linux_${SHFMT_ARCH}"
+        TMP_FILE=$(mktemp)
+        if curl -fsSL "$DOWNLOAD_URL" -o "$TMP_FILE"; then
+            chmod +x "$TMP_FILE"
+            sudo mv "$TMP_FILE" /usr/local/bin/shfmt
+            if shfmt --version &>/dev/null; then
+                pass "shfmt installed/updated successfully ($SHFMT_VERSION)"
+            else
+                fail "shfmt installation verification failed"
+                return 1
+            fi
+        else
+            fail "Failed to download shfmt"
+            rm -f "$TMP_FILE"
+            return 1
+        fi
+        ;;
+    *)
+        pass "Skipping on non-Linux platform"
+        ;;
+esac

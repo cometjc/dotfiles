@@ -57,6 +57,7 @@ fail() {
 source /etc/lsb-release
 if [[ $DISTRIB_ID = LinuxMint ]] && [[ -f /etc/upstream-release/lsb-release ]]; then
     # for Linux Mint, we treat it as Ubuntu
+    # shellcheck source=/dev/null
     source /etc/upstream-release/lsb-release
 fi
 
