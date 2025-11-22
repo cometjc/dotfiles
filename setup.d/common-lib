@@ -65,21 +65,24 @@ if [[ -f /etc/lsb-release ]]; then
     fi
 fi
 
-case $(uname) in
-    Linux)
-        platform='linux'
-        ;;
-    FreeBSD)
-        platform='freebsd'
-        ;;
-    Darwin)
-        platform='mac'
-        ;;
-    *)
-        # shellcheck disable=SC2034
-        platform='unknown'
-        ;;
-esac
+# Ensure platform is set (used by multiple setup scripts)
+# shellcheck disable=SC2034
+if [[ -z "${platform:-}" ]]; then
+    case $(uname) in
+        Linux)
+            platform='linux'
+            ;;
+        FreeBSD)
+            platform='freebsd'
+            ;;
+        Darwin)
+            platform='mac'
+            ;;
+        *)
+            platform='unknown'
+            ;;
+    esac
+fi
 
 case $platform in
     'linux')

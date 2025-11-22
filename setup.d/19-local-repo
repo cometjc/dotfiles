@@ -13,24 +13,6 @@ fi
 ## Replace Ubuntu repository with local mirror
 #######################
 
-# Ensure platform is set
-if [[ -z "${platform:-}" ]]; then
-    case $(uname) in
-        Linux)
-            platform='linux'
-            ;;
-        FreeBSD)
-            platform='freebsd'
-            ;;
-        Darwin)
-            platform='mac'
-            ;;
-        *)
-            platform='unknown'
-            ;;
-    esac
-fi
-
 case $platform in
     'linux')
         # Find files containing archive.ubuntu.com using sudo grep

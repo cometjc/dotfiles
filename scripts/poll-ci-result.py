@@ -163,6 +163,10 @@ def parse_log_line(line: str, known_jobs: list[str]) -> tuple[str | None, str | 
     if not line:
         return None, None, None
 
+    # Skip GitHub Actions group markers
+    if line.startswith("##[group]") or line.startswith("##[endgroup]"):
+        return None, None, None
+
     # Remove microsecond timestamps (e.g., .2038901Z)
     line = MICROSECOND_PATTERN.sub("", line)
 
@@ -208,6 +212,7 @@ def display_failed_logs(run_id: str, failed_jobs: list[dict]) -> None:
 
     current_job = None
     last_printed_step = None
+    last_printed_content = None
     for line in output.split("\n")[-200:]:
         job_name, step_name, content = parse_log_line(line, known_jobs)
         if not job_name:
@@ -219,14 +224,18 @@ def display_failed_logs(run_id: str, failed_jobs: list[dict]) -> None:
             print(f"  {BLUE}[JOB]{NC} {job_name}")
             current_job = job_name
             last_printed_step = None
+            last_printed_content = None
 
         # Only print step if it's different from the last printed step
         if step_name and step_name != last_printed_step:
             print(f"    {BLUE}[STEP]{NC} {step_name}")
             last_printed_step = step_name
+            last_printed_content = None
 
-        if content:
+        # Only print content if it's different from the last printed content
+        if content and content != last_printed_content:
             print(f"    {content}")
+            last_printed_content = content
 
 
 def main():
