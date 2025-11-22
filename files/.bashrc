@@ -316,4 +316,5 @@ include_scripts
 alias tm='task-master'
 alias taskmaster='task-master'
 
+# shellcheck source=/dev/null
 . "$HOME/.local/bin/env"

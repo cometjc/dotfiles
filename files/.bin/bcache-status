@@ -54,14 +54,13 @@ def format_sectors(x):
 
     if asectors == 0:
         return "0B"
-    elif asectors < 2048:
+    if asectors < 2048:
         return "%.2fKiB" % (sectors / 2)
-    elif asectors < 2097152:
+    if asectors < 2097152:
         return "%.2fMiB" % (sectors / 2048)
-    elif asectors < 2147483648:
+    if asectors < 2147483648:
         return "%.2fGiB" % (sectors / 2097152)
-    else:
-        return "%.2fTiB" % (sectors / 2147483648)
+    return "%.2fTiB" % (sectors / 2147483648)
 
 
 def interpret_sectors(x):
@@ -83,8 +82,7 @@ def interpret_sectors(x):
             factor = factors[x[-1]]
             x = x[:-1]
         return int(float(x) * factor / 512)
-    else:
-        return 1
+    return 1
 
 
 def pretty_size(x):
@@ -117,14 +115,14 @@ def dump_bdev(bdev_path):
             val = conversion_func(val)
         if display_name is None:
             display_name = sysfs_name
-        print("  %-*s%s" % (MAX_KEY_LENGTH - 2, display_name, val))
+        print(f"  {display_name:<{MAX_KEY_LENGTH - 2}}{val}")
 
 
 def dump_cachedev(cachedev_path):
     """Dump a cachding device stats."""
 
     def fmt_cachesize(val):
-        return "%s\t(%d%%)" % (format_sectors(val), float(val) / cache_size * 100)
+        return f"{format_sectors(val)}\t({int(float(val) / cache_size * 100)}%)"
 
     global MAX_KEY_LENGTH, devnum_map
     attrs = [
@@ -143,7 +141,7 @@ def dump_cachedev(cachedev_path):
     ]
 
     stats = get_cache_priority_stats(cachedev_path)
-    cache_size = int(file_to_line("%s/../size" % cachedev_path))
+    cache_size = int(file_to_line(f"{cachedev_path}/../size"))
     unused_sectors = float(stats["Unused"][:-1]) * cache_size / 100
     used_sectors = cache_size - unused_sectors
 
@@ -155,7 +153,7 @@ def dump_cachedev(cachedev_path):
             val = conversion_func(val)
         if display_name is None:
             display_name = sysfs_name
-        print("  %-*s%s" % (MAX_KEY_LENGTH - 2, display_name, val))
+        print(f"  {display_name:<{MAX_KEY_LENGTH - 2}}{val}")
 
 
 def hits_to_str(hits_str, misses_str):
@@ -163,9 +161,9 @@ def hits_to_str(hits_str, misses_str):
     hits = int(hits_str)
     misses = int(misses_str)
 
-    ret = "%d" % hits
+    ret = f"{hits}"
     if hits + misses != 0:
-        ret = "%s\t(%.d%%)" % (ret, 100 * hits / (hits + misses))
+        ret = f"{ret}\t({int(100 * hits / (hits + misses))}%)"
     return ret
 
 
@@ -192,9 +190,7 @@ def dump_stats(sysfs_path, indent_str, stats):
         ("Misses", lambda: stat_data["cache_misses"]),
         (
             "Bypass Hits",
-            lambda: hits_to_str(
-                stat_data["cache_bypass_hits"], stat_data["cache_bypass_misses"]
-            ),
+            lambda: hits_to_str(stat_data["cache_bypass_hits"], stat_data["cache_bypass_misses"]),
         ),
         ("Bypass Misses", lambda: stat_data["cache_bypass_misses"]),
         ("Bypassed", lambda: pretty_size(stat_data["bypassed"])),
@@ -209,14 +205,14 @@ def dump_stats(sysfs_path, indent_str, stats):
             stat_data[attr] = val
         for display_name, str_func in display:
             d = f"{indent_str}{stat_display_name} {display_name}"
-            print("%-*s%s" % (MAX_KEY_LENGTH, d, str_func()))
+            print(f"{d:<{MAX_KEY_LENGTH}}{str_func()}")
 
 
 def get_cache_priority_stats(cache):
     """Retrieve priority stats from a cache."""
     attrs = {}
 
-    for line in file_to_lines("%s/priority_stats" % cache):
+    for line in file_to_lines(f"{cache}/priority_stats"):
         x = line.split()
         key = x[0]
         value = x[1]
@@ -229,7 +225,7 @@ def dump_bcache(bcache_sysfs_path, stats, print_subdevices, devices):
     global devnum_map
 
     def fmt_cachesize(val):
-        return "%s\t(%d%%)" % (format_sectors(val), 100.0 * val / cache_sectors)
+        return f"{format_sectors(val)}\t({int(100.0 * val / cache_sectors)}%)"
 
     attrs_cache = [
         (None, "UUID", lambda x: os.path.basename(bcache_sysfs_path)),
@@ -253,15 +249,12 @@ def dump_bcache(bcache_sysfs_path, stats, print_subdevices, devices):
         (
             "cache_available_percent",
             "Evictable Cache",
-            lambda x: "%s\t(%s%%)"
-            % (format_sectors(float(x) * cache_sectors / 100), x),
+            lambda x: f"{format_sectors(float(x) * cache_sectors / 100)}\t({x}%)",
         ),
         (
             None,
             "Replacement Policy",
-            lambda x: replacement_policies.pop()
-            if len(replacement_policies) == 1
-            else "(Unknown)",
+            lambda x: replacement_policies.pop() if len(replacement_policies) == 1 else "(Unknown)",
         ),
     ]
     attrs_bdev = [
@@ -273,7 +266,7 @@ def dump_bcache(bcache_sysfs_path, stats, print_subdevices, devices):
         ("sequential_cutoff", "Sequential Cutoff", pretty_size),
         ("readahead_cache_policy", "Readahead Cache", None),
         ("writeback_delay", "Writeback Delay", pretty_time),
-        ("writeback_percent", "Writeback Percent", lambda x: "%s" % x + "%"),
+        ("writeback_percent", "Writeback Percent", lambda x: f"{x}" + "%"),
         (
             "writeback_rate",
             "Writeback rate",
@@ -300,9 +293,7 @@ def dump_bcache(bcache_sysfs_path, stats, print_subdevices, devices):
             cstats = get_cache_priority_stats(f"{bcache_sysfs_path}/{obj}")
             unused_size = float(cstats["Unused"][:-1]) * cache_size / 100
             cache_unused_sectors += unused_size
-            replacement_policies.add(
-                file_to_line(f"{bcache_sysfs_path}/{obj}/cache_replacement_policy")
-            )
+            replacement_policies.add(file_to_line(f"{bcache_sysfs_path}/{obj}/cache_replacement_policy"))
             cache_used_sectors = cache_sectors - cache_unused_sectors
         elif obj.startswith("bdev"):
             ##dump_stats('%s/%s' % (bcache_sysfs_path, obj))
@@ -310,7 +301,7 @@ def dump_bcache(bcache_sysfs_path, stats, print_subdevices, devices):
     bdevs.sort()
 
     # Dump cache stats
-    print("--- %s ---" % cache_name)
+    print(f"--- {cache_name} ---")
     for sysfs_name, display_name, conversion_func in attrs_cache:
         if sysfs_name is not None:
             val = file_to_line(f"{bcache_sysfs_path}/{sysfs_name}")
@@ -320,11 +311,11 @@ def dump_bcache(bcache_sysfs_path, stats, print_subdevices, devices):
             val = conversion_func(val)
         if display_name is None:
             display_name = sysfs_name
-        print("%-*s%s" % (MAX_KEY_LENGTH, display_name, val))
+        print(f"{display_name:<{MAX_KEY_LENGTH}}{val}")
     dump_stats(bcache_sysfs_path, "", stats)
 
     for bdev in bdevs:
-        print("--- %s ---" % os.path.basename(bdev))
+        print(f"--- {os.path.basename(bdev)} ---")
         for sysfs_name, display_name, conversion_func in attrs_bdev:
             if sysfs_name is not None:
                 val = file_to_line(f"{bdev}/{sysfs_name}")
@@ -334,7 +325,7 @@ def dump_bcache(bcache_sysfs_path, stats, print_subdevices, devices):
                 val = conversion_func(val)
             if display_name is None:
                 display_name = sysfs_name
-            print("%-*s%s" % (MAX_KEY_LENGTH, display_name, val))
+            print(f"{display_name:<{MAX_KEY_LENGTH}}{val}")
 
         dump_stats(bdev, "", stats)
 
@@ -399,21 +390,15 @@ def main():
     run_gc = False
 
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument(
-        "--help", help="show this help message and exit", action="store_true"
-    )
+    parser.add_argument("--help", help="show this help message and exit", action="store_true")
     parser.add_argument(
         "-f",
         "--five-minute",
         help="Print the last five minutes of stats.",
         action="store_true",
     )
-    parser.add_argument(
-        "-h", "--hour", help="Print the last hour of stats.", action="store_true"
-    )
-    parser.add_argument(
-        "-d", "--day", help="Print the last day of stats.", action="store_true"
-    )
+    parser.add_argument("-h", "--hour", help="Print the last hour of stats.", action="store_true")
+    parser.add_argument("-d", "--day", help="Print the last day of stats.", action="store_true")
     parser.add_argument("-t", "--total", help="Print total stats.", action="store_true")
     parser.add_argument("-a", "--all", help="Print all stats.", action="store_true")
     parser.add_argument(
@@ -422,12 +407,8 @@ def main():
         help="Reset stats after printing them.",
         action="store_true",
     )
-    parser.add_argument(
-        "-s", "--sub-status", help="Print subdevice status.", action="store_true"
-    )
-    parser.add_argument(
-        "-g", "--gc", help="Invoke GC before printing status.", action="store_true"
-    )
+    parser.add_argument("-s", "--sub-status", help="Print subdevice status.", action="store_true")
+    parser.add_argument("-g", "--gc", help="Invoke GC before printing status.", action="store_true")
     parser.add_argument("-R", "--repeat", help="Run periodically.", action="store_true")
     parser.add_argument(
         "-I",

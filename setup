@@ -10,7 +10,7 @@ here=$(pwd)
 # ensure attr package is installed for getfattr/setfattr commands
 common_lib="$here/setup.d/common-lib"
 if [[ -f "$common_lib" ]]; then
-    # shellcheck source=common-lib
+    # shellcheck source=/dev/null
     . "$common_lib"
 fi
 
@@ -28,7 +28,13 @@ run-parts --exit-on-error --regex='[0-9][0-9]-*' $arg .
 # Setup self default using rebase when pull
 git config branch.master.rebase true
 
+# Install pre-commit hooks
+pre-commit install
+
 # Daily Update dotfiles repo
 if ! (crontab -l 2>/dev/null | grep -q git_update_dotfiles.bash); then
-    (crontab -l 2>/dev/null || true; echo "@daily $here/git_update_dotfiles.bash") | crontab -
+    (
+        crontab -l 2>/dev/null || true
+        echo "@daily $here/git_update_dotfiles.bash"
+    ) | crontab -
 fi

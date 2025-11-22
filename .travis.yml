@@ -1,6 +1,4 @@
----
 language: python
-
 cache:
   apt: true
   pip: true
@@ -16,5 +14,4 @@ matrix:
       dist: trusty
       sudo: required
     - os: osx
-
 script: ./setup_dotfiles.bash

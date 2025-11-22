@@ -17,7 +17,7 @@ if [[ ! -d ~/.vim/autoload ]]; then
     mkdir -p ~/.vim/autoload
 fi
 (
-    cd ~/.vim/autoload
+    cd ~/.vim/autoload || exit
     [[ -f plug.vim ]] || curl -fLo plug.vim https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 )
 
