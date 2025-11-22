@@ -20,7 +20,7 @@ fi
 # Setup  https://github.com/powerline/fonts
 mkdir -p ~/.local/share/fonts/
 (
-    cd ~/.local/share/fonts/
+    cd ~/.local/share/fonts/ || exit
     if [[ -f PowerlineSymbols.otf ]]; then
         ts_flag=(-z PowerlineSymbols.otf)
     fi
@@ -28,7 +28,7 @@ mkdir -p ~/.local/share/fonts/
 )
 mkdir -p ~/.config/fontconfig/conf.d/
 (
-    cd ~/.config/fontconfig/conf.d/
+    cd ~/.config/fontconfig/conf.d/ || exit
     if [[ -f 10-powerline-symbols.conf ]]; then
         ts_flag=(-z 10-powerline-symbols.conf)
     fi
