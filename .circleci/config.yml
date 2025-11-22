@@ -45,20 +45,18 @@ jobs:
             export HOME=/tmp/circleci-home
             mkdir -p "$HOME"
             # Create a wrapper to prevent crontab modification
-            cat > /tmp/setup-wrapper.sh << 'EOF'
-            #!/bin/bash
-            # Mock crontab to prevent actual modification
-            crontab() {
-              if [[ "$1" == "-l" ]]; then
-                echo "# Mock crontab output"
-              else
-                echo "Skipping crontab modification in CI environment"
-              fi
-            }
-            export -f crontab
-            cd "$(dirname "$0")"
-            ./setup -f
-            EOF
+            echo '#!/bin/bash' > /tmp/setup-wrapper.sh
+            echo '# Mock crontab to prevent actual modification' >> /tmp/setup-wrapper.sh
+            echo 'crontab() {' >> /tmp/setup-wrapper.sh
+            echo '  if [[ "$1" == "-l" ]]; then' >> /tmp/setup-wrapper.sh
+            echo '    echo "# Mock crontab output"' >> /tmp/setup-wrapper.sh
+            echo '  else' >> /tmp/setup-wrapper.sh
+            echo '    echo "Skipping crontab modification in CI environment"' >> /tmp/setup-wrapper.sh
+            echo '  fi' >> /tmp/setup-wrapper.sh
+            echo '}' >> /tmp/setup-wrapper.sh
+            echo 'export -f crontab' >> /tmp/setup-wrapper.sh
+            echo 'cd "$(dirname "$0")"' >> /tmp/setup-wrapper.sh
+            echo './setup -f' >> /tmp/setup-wrapper.sh
             chmod +x /tmp/setup-wrapper.sh
             # Run setup with force flag to ensure scripts execute
             # This will actually install packages and run setup scripts
@@ -117,20 +115,18 @@ jobs:
             export HOME=/tmp/circleci-home
             mkdir -p "$HOME"
             # Create a wrapper to prevent crontab modification
-            cat > /tmp/setup-wrapper.sh << 'EOF'
-            #!/bin/bash
-            # Mock crontab to prevent actual modification
-            crontab() {
-              if [[ "$1" == "-l" ]]; then
-                echo "# Mock crontab output"
-              else
-                echo "Skipping crontab modification in CI environment"
-              fi
-            }
-            export -f crontab
-            cd "$(dirname "$0")"
-            ./setup -f
-            EOF
+            echo '#!/bin/bash' > /tmp/setup-wrapper.sh
+            echo '# Mock crontab to prevent actual modification' >> /tmp/setup-wrapper.sh
+            echo 'crontab() {' >> /tmp/setup-wrapper.sh
+            echo '  if [[ "$1" == "-l" ]]; then' >> /tmp/setup-wrapper.sh
+            echo '    echo "# Mock crontab output"' >> /tmp/setup-wrapper.sh
+            echo '  else' >> /tmp/setup-wrapper.sh
+            echo '    echo "Skipping crontab modification in CI environment"' >> /tmp/setup-wrapper.sh
+            echo '  fi' >> /tmp/setup-wrapper.sh
+            echo '}' >> /tmp/setup-wrapper.sh
+            echo 'export -f crontab' >> /tmp/setup-wrapper.sh
+            echo 'cd "$(dirname "$0")"' >> /tmp/setup-wrapper.sh
+            echo './setup -f' >> /tmp/setup-wrapper.sh
             chmod +x /tmp/setup-wrapper.sh
             # Run setup with force flag to ensure scripts execute
             # This will actually install packages and run setup scripts
