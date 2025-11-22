@@ -4,7 +4,7 @@
 /.gitconfig
 
 *.pyc
-*.tags
+.tags*
 /tags
 /files/.bashrc.d/bashrc_local
 /files/.bashrc.d/local_env

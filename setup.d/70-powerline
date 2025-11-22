@@ -9,7 +9,13 @@ else
     exit 1
 fi
 
-uv tool install --with powerline-gitstatus powerline-status -p 3.8
+# Ensure uv is in PATH
+export PATH="$HOME/.local/bin:$PATH"
+if ! command -v uv &>/dev/null; then
+    change "uv not found, skipping powerline installation"
+else
+    uv tool install --with powerline-gitstatus powerline-status -p 3.8
+fi
 
 # Setup  https://github.com/powerline/fonts
 mkdir -p ~/.local/share/fonts/

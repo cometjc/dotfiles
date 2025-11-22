@@ -24,5 +24,10 @@ fi
 #######################
 ## install vim plugins
 #######################
-vim +PlugInstall +qall
+# Use ex mode (-e) to output to console instead of vim UI
+# Redirect stdin from /dev/null to avoid interactive prompts
+vim -e -c "source ~/.vimrc" -c "PlugInstall" -c "qall" </dev/null 2>&1 || {
+    # If that fails, try a simpler approach
+    vim -e -c "PlugInstall" -c "qall" </dev/null 2>&1 || true
+}
 find "$HOME/.vim/" -name \*.vim -exec dos2unix -q {} \;

@@ -9,10 +9,21 @@ else
     exit 1
 fi
 
-eval "$("$HOME/.local/bin/mise" activate bash)"
-mise use --global node@latest node@20
+# Ensure mise is available
+export PATH="$HOME/.local/bin:$PATH"
+if ! command -v mise &>/dev/null; then
+    fail "mise not found, skipping node apps installation"
+    exit 0
+fi
 
-mise use -g npm:@openai/codex
-mise exec node@latest -- npm update -g npm
-mise exec node@latest -- npm install -g @commitlint/{cli,config-conventional,load} opencommit
-mise exec node@latest -- npm install -g task-master-ai
+eval "$(mise activate bash)" || {
+    fail "Failed to activate mise"
+    exit 0
+}
+
+mise use --global node@latest node@20 || true
+
+mise use -g npm:@openai/codex || true
+mise exec node@latest -- npm update -g npm || change "npm update failed (may be I/O error)"
+mise exec node@latest -- npm install -g @commitlint/{cli,config-conventional,load} opencommit || change "npm install failed (may be I/O error)"
+mise exec node@latest -- npm install -g task-master-ai || change "npm install task-master-ai failed (may be I/O error)"

@@ -24,14 +24,23 @@ trap 'errexit' ERR
 #  expansions and subshells
 set -eE -o pipefail -o errtrace
 
-# imporot common functions
-. ../files/.bashrc.d/02-functions
+# import common functions
+# Get the directory where this script is located
+_common_lib_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+. "$_common_lib_dir/../files/.bashrc.d/02-functions"
 
 # 定義顏色
-GREEN=$(tput setaf 2)
-YELLOW=$(tput setaf 3)
-RED=$(tput setaf 1)
-NC=$(tput sgr0)
+if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
+    GREEN=$(tput setaf 2 2>/dev/null || echo "")
+    YELLOW=$(tput setaf 3 2>/dev/null || echo "")
+    RED=$(tput setaf 1 2>/dev/null || echo "")
+    NC=$(tput sgr0 2>/dev/null || echo "")
+else
+    GREEN=""
+    YELLOW=""
+    RED=""
+    NC=""
+fi
 
 pass() {
     echo -e "${GREEN}[PASS]${NC} $1"
@@ -92,7 +101,7 @@ case $platform in
             fi
 
             change "Installing missing packages: ${pkgs_to_install[*]}"
-            if ! sudo aptitude install -y "${pkgs_to_install[@]}"; then
+            if ! sudo apt-get install -y "${pkgs_to_install[@]}"; then
                 fail "Failed to install packages: ${pkgs_to_install[*]}"
                 return 1
             fi
@@ -144,7 +153,16 @@ skip_script_if_executed() {
 
 mark_script_executed() {
     caller=${BASH_SOURCE[2]##*/}
-    setfattr -n user.executed -v "$(date +%s)" "${caller}"
+    caller_path="${BASH_SOURCE[2]}"
+    # Get absolute path if relative
+    if [[ ! "$caller_path" = /* ]]; then
+        caller_path="$(cd "$(dirname "$caller_path")" && pwd)/$(basename "$caller_path")" 2>/dev/null || return 0
+    fi
+    if [[ -f "$caller_path" ]]; then
+        # Try to get timestamp, but don't fail on I/O errors
+        timestamp=$(date +%s 2>/dev/null) || return 0
+        setfattr -n user.executed -v "$timestamp" "$caller_path" 2>/dev/null || true
+    fi
 }
 
 cleanup() {

@@ -12,9 +12,18 @@ fi
 [[ "$DISTRIB_ID" != Ubuntu ]] && exit
 command -v flatpak &>/dev/null || sudo apt-get install -y flatpak
 
-flatpak install -y org.telegram.desktop
-flatpak install -y com.ticktick.TickTick
-flatpak install -y flathub org.keepassxc.KeePassXC
+# Ensure flathub remote is added (both system and user level)
+if ! flatpak remote-list | grep -q flathub; then
+    sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+fi
+# Add user-level remote if using --user install
+if ! flatpak remote-list --user | grep -q flathub; then
+    flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+fi
+
+flatpak install --user -y flathub org.telegram.desktop
+flatpak install --user -y flathub com.ticktick.TickTick
+flatpak install --user -y flathub org.keepassxc.KeePassXC
 flatpak --user override --filesystem=/usr/share/icons:ro
 for path in ~/Documents/ ~/Downloads/ ~/Music/ ~/Pictures/ ~/Videos/; do
     flatpak --user override --filesystem="$path"

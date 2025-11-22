@@ -7,11 +7,18 @@ fi
 cd "$(dirname "$0")" || exit
 here=$(pwd)
 
+# ensure attr package is installed for getfattr/setfattr commands
+common_lib="$here/setup.d/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+fi
+
 cd setup.d || exit 1
 if [[ " $* " == *" -f "* ]]; then
     arg="--arg=-f"
 fi
-
+ensure_pkg attr
 # shellcheck disable=SC2086
 run-parts --exit-on-error --regex='[0-9][0-9]-*' $arg .
 
@@ -22,11 +29,6 @@ run-parts --exit-on-error --regex='[0-9][0-9]-*' $arg .
 git config branch.master.rebase true
 
 # Daily Update dotfiles repo
-if ! (crontab -l | grep -q git_update_dotfiles.bash); then
-    crontab -l \
-        | {
-            cat
-            echo "@daily $here/git_update_dotfiles.bash"
-        } \
-        | crontab -
+if ! (crontab -l 2>/dev/null | grep -q git_update_dotfiles.bash); then
+    (crontab -l 2>/dev/null || true; echo "@daily $here/git_update_dotfiles.bash") | crontab -
 fi

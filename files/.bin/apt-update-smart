@@ -49,6 +49,17 @@ for file in "${files[@]}"; do
     curr_meta+=";$file:$file_hash"
 done
 
+# 收集所有 GPG 金鑰檔案（repository 配置的一部分）
+if [ -d "/etc/apt/keyrings" ]; then
+    mapfile -d $'\0' -t keyring_files < <(find /etc/apt/keyrings -type f -print0)
+    for file in "${keyring_files[@]}"; do
+        [[ ! -f "$file" ]] && continue
+        file_hash=$(get_hash "$file") || continue
+        current_files["$file"]="$file_hash"
+        curr_meta+=";$file:$file_hash"
+    done
+fi
+
 # 分析變更
 changes=()
 
@@ -102,6 +113,9 @@ check_update() {
     done
 }
 
+# 執行變更檢查
+check_update
+
 # 執行更新
 if [[ ${#changes[@]} -eq 0 ]]; then
     echo "SKIP: same repo configs & last update within 1 day"
@@ -117,10 +131,12 @@ printf '%s\n' "${changes[@]}"
 #done
 
 # 確保 apt update 成功執行
-if ! sudo "$0" update; then
+if ! sudo apt-get update; then
     echo "Error: apt update failed" >&2
     return 1
 fi
 
 # 儲存新的 metadata
-save_meta "$curr_meta" || return 1
+if ! save_meta "$curr_meta"; then
+    echo "Warning: Failed to save metadata, but update completed" >&2
+fi

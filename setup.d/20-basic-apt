@@ -31,7 +31,6 @@ case $platform in
             curl
             parallel
             pv
-            flocks
             entr       # required by tmux plugins (tpm)
             util-linux # flock
             # Filesystem tools

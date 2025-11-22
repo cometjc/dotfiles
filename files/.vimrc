@@ -111,7 +111,7 @@ Plug 'chrisbra/csv.vim'
 Plug 'vim-ruby/vim-ruby'
 Plug 'ngmy/vim-rubocop'
 "========================== Tools - Git
-Plug 'airblade/vim-gitgutter'
+"Plug 'airblade/vim-gitgutter'
 let g:gitgutter_escape_grep = 1
 let g:gitgutter_max_signs = 5000
 Plug 'tpope/vim-fugitive'

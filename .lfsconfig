@@ -1,4 +1,0 @@
-[lfs]
-    ssh.allowed = false
-    ssh.disabled = true
-    usehttppath = true

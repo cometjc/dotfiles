@@ -9,14 +9,21 @@ else
     exit 1
 fi
 
-find /sys/fs/bcache/ -mindepth 1 -maxdepth 1 -type d | while read -r cache; do
+# Skip if bcache is not available
+if [[ ! -d /sys/fs/bcache ]] && ! find /sys/block -maxdepth 1 -name 'bcache*' -type l | grep -q .; then
+    pass "bcache not available, skipping"
+    export skipped=1
+    exit
+fi
+
+find /sys/fs/bcache/ -mindepth 1 -maxdepth 1 -type d 2>/dev/null | while read -r cache; do
     sudo bash -v -c "\
         echo 0 > '$cache/congested_read_threshold_us'
         echo 0 > '$cache/congested_write_threshold_us'\
         "
 done
 
-find /sys/block -maxdepth 1 -name 'bcache*' -type l | while read -r bcache; do
+find /sys/block -maxdepth 1 -name 'bcache*' -type l 2>/dev/null | while read -r bcache; do
     sudo bash -v -c "\
         echo 0 > '$bcache/bcache/writeback_percent'\
         "

@@ -9,10 +9,10 @@ else
     exit 1
 fi
 
-version=$(rclone --version 2>/dev/null | head -n 1)
+version=$(rclone --version 2>/dev/null | head -n 1 || echo "")
 current_version=$(curl -fsS https://downloads.rclone.org/version.txt)
 
-if [[ "$version" == "$current_version" ]]; then
+if [[ -n "$version" ]] && [[ "$version" == "$current_version" ]]; then
     pass "rclone is already the latest version"
 else
     change "Install / update rclone"

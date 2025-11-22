@@ -10,9 +10,14 @@ else
 fi
 
 if [[ "$platform" == linux ]]; then
-    # set moving window to Super+click
-    gsettings set org.cinnamon.desktop.wm.preferences mouse-button-modifier '<Super>'
-    gsettings set org.gnome.desktop.wm.preferences focus-new-windows 'smart'
+    # set moving window to Super+click (Cinnamon)
+    if gsettings list-schemas | grep -q '^org\.cinnamon\.desktop\.wm\.preferences$'; then
+        gsettings set org.cinnamon.desktop.wm.preferences mouse-button-modifier '<Super>'
+    fi
+    # GNOME window focus behavior
+    if gsettings list-schemas | grep -q '^org\.gnome\.desktop\.wm\.preferences$'; then
+        gsettings set org.gnome.desktop.wm.preferences focus-new-windows 'smart'
+    fi
 
     # start fcitx5 on login
     if [[ -f /usr/share/applications/org.fcitx.Fcitx5.desktop ]]; then
@@ -21,9 +26,10 @@ if [[ "$platform" == linux ]]; then
     fi
     # linuxmint/cinnamon: Option for Alt-Tab switcher to list windows on current monitor only
     patch_script="$(dirname "$(realpath "$0")")/scripts/apply-appswitcher-patch.sh"
-    chmod +x "$patch_script"
-
-    $patch_script
+    if [[ -f "$patch_script" ]]; then
+        chmod +x "$patch_script"
+        $patch_script || change "appswitcher patch script failed (may not be needed)"
+    fi
 
     # Set up post-install hook for cinnamon-common
     if [[ -d /etc/apt/apt.conf.d/ ]] && [[ ! -f /etc/apt/apt.conf.d/99cinnamon-patch ]]; then

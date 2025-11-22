@@ -3,6 +3,10 @@
 _beep_sound=$(realpath "$(dirname "${BASH_SOURCE[0]}")")/.15-complete.oga
 
 _beep() {
+    # Skip if play command is not installed
+    if ! command -v play &>/dev/null; then
+        return
+    fi
     #paplay "$_beep_sound" --volume=60000
     AUDIODRIVER=alsa play -q -n synth pl G2 pl B2 pl D3 pl G3 pl D4 pl G4 delay 0.3 .35 .4 .45 .5 .55 remix - fade q .6 3 1.5 vol 0.5
 }

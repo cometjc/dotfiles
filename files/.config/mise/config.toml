@@ -1,0 +1,7 @@
+[settings]
+experimental = true
+
+[tools]
+go = "1.23"
+node = ["latest", "20"]
+"npm:@openai/codex" = "latest"
