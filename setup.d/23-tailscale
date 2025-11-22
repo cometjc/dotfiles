@@ -9,6 +9,9 @@ else
     exit 1
 fi
 
+# Ensure platform is set (from common-lib)
+: "${platform:?platform variable must be set by common-lib}"
+
 setup_tailscale() {
     if [[ "$platform" != linux ]]; then
         return

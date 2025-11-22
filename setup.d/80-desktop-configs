@@ -9,6 +9,9 @@ else
     exit 1
 fi
 
+# Ensure platform is set (from common-lib)
+: "${platform:?platform variable must be set by common-lib}"
+
 if [[ "$platform" == linux ]]; then
     # set moving window to Super+click (Cinnamon)
     if gsettings list-schemas | grep -q '^org\.cinnamon\.desktop\.wm\.preferences$'; then
