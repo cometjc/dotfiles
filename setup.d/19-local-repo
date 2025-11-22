@@ -1,0 +1,68 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+#######################
+## Replace Ubuntu repository with local mirror
+#######################
+
+case $platform in
+    'linux')
+        # Find files containing archive.ubuntu.com using sudo grep
+        files_to_update=()
+
+        # Check /etc/apt/sources.list
+        if [[ -f /etc/apt/sources.list ]]; then
+            if sudo grep -q "archive.ubuntu.com" /etc/apt/sources.list 2>/dev/null; then
+                files_to_update+=("/etc/apt/sources.list")
+            fi
+        fi
+
+        # Check /etc/apt/sources.list.d/*.list and *.sources files
+        if [[ -d /etc/apt/sources.list.d ]]; then
+            while IFS= read -r -d '' file; do
+                if sudo grep -q "archive.ubuntu.com" "$file" 2>/dev/null; then
+                    files_to_update+=("$file")
+                fi
+            done < <(sudo find /etc/apt/sources.list.d \( -name "*.list" -o -name "*.sources" \) -type f -print0 2>/dev/null)
+        fi
+
+        # Check /etc/cloud/cloud.cfg (only replace primary, not dynamic EC2 URLs)
+        if [[ -f /etc/cloud/cloud.cfg ]]; then
+            if sudo grep -q "primary:.*archive.ubuntu.com" /etc/cloud/cloud.cfg 2>/dev/null; then
+                files_to_update+=("/etc/cloud/cloud.cfg")
+            fi
+        fi
+
+        # Replace archive.ubuntu.com with free.nchc.org.tw in found files
+        if [[ ${#files_to_update[@]} -eq 0 ]]; then
+            pass "No files found containing archive.ubuntu.com"
+        else
+            change "Found ${#files_to_update[@]} file(s) to update:"
+            for file in "${files_to_update[@]}"; do
+                echo "  - $file"
+            done
+
+            for file in "${files_to_update[@]}"; do
+                change "Replacing archive.ubuntu.com with free.nchc.org.tw in $file"
+                # For cloud.cfg, only replace primary line, not dynamic EC2 URLs
+                if [[ "$file" == "/etc/cloud/cloud.cfg" ]]; then
+                    sudo sed -i 's|primary: http://archive.ubuntu.com/ubuntu|primary: http://free.nchc.org.tw/ubuntu|g' "$file"
+                else
+                    sudo sed -i 's|archive.ubuntu.com|free.nchc.org.tw|g' "$file"
+                fi
+            done
+            pass "Updated ${#files_to_update[@]} file(s)"
+        fi
+        ;;
+    *)
+        pass "Skipping on non-Linux platform"
+        ;;
+esac

@@ -17,7 +17,10 @@ install_helm_direct() {
         amd64) HELM_ARCH="amd64" ;;
         arm64) HELM_ARCH="arm64" ;;
         armhf) HELM_ARCH="arm" ;;
-        *) fail "Unsupported architecture: $ARCH"; return 1 ;;
+        *)
+            fail "Unsupported architecture: $ARCH"
+            return 1
+            ;;
     esac
     curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-${HELM_ARCH}.tar.gz" | tar -xz
     sudo mv linux-${HELM_ARCH}/helm /usr/local/bin/helm
@@ -29,11 +32,11 @@ install_helm_direct() {
 if command -v helm &>/dev/null; then
     pass "helm is already installed"
 else
-    # Try apt repository method
+    # Try apt repository method (using new Buildkite repository)
     if [[ ! -f /usr/share/keyrings/helm.gpg ]]; then
-        ensure_pkg curl apt-transport-https
-        if curl -fsSL https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg >/dev/null 2>&1; then
-            REPO_LINE="deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main"
+        ensure_pkg curl gpg apt-transport-https
+        if curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg >/dev/null 2>&1; then
+            REPO_LINE="deb [signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main"
             if ! grep -q -F "$REPO_LINE" /etc/apt/sources.list.d/helm-stable-debian.list 2>/dev/null; then
                 echo "$REPO_LINE" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list >/dev/null
             fi
@@ -49,6 +52,13 @@ else
             install_helm_direct
         fi
     else
+        # Check if using old Balto repository and migrate to Buildkite
+        if grep -q "baltocdn.com" /etc/apt/sources.list.d/helm-stable-debian.list 2>/dev/null; then
+            change "Migrating from old Balto repository to Buildkite"
+            curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg >/dev/null
+            REPO_LINE="deb [signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main"
+            echo "$REPO_LINE" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list >/dev/null
+        fi
         apt-update-smart
         if ensure_pkg helm 2>/dev/null; then
             pass "helm installed via apt repository"

@@ -80,6 +80,21 @@ case $platform in
     'linux')
         check_pkg() { [[ "$(dpkg-query --show --showformat='${db:Status-Status}' "$1" 2>/dev/null)" = installed ]]; }
         update_pkg_list() { sudo env "PATH=$PATH" apt update; }
+        # apt-update-smart: smart apt update that only runs when repo configs change
+        apt-update-smart() {
+            local apt_update_script
+            apt_update_script="$HOME/.bin/apt-update-smart"
+            # Fallback to files/.bin if ~/.bin doesn't exist
+            if [[ ! -f "$apt_update_script" ]]; then
+                apt_update_script="$_common_lib_dir/../files/.bin/apt-update-smart"
+            fi
+            if [[ -f "$apt_update_script" ]]; then
+                bash "$apt_update_script" update
+            else
+                # Fallback to regular update if script not found
+                update_pkg_list
+            fi
+        }
         # aptitude can solve depenency problem for clang-*, setup aptitude first
         if ! check_pkg aptitude; then
             sudo apt-get install -q -y aptitude

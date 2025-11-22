@@ -10,7 +10,10 @@ else
 fi
 
 [[ "$DISTRIB_ID" != Ubuntu ]] && exit
-command -v flatpak &>/dev/null || sudo apt-get install -y flatpak
+if ! command -v flatpak &>/dev/null; then
+    update_pkg_list
+    sudo apt-get install -y flatpak
+fi
 
 # Ensure flathub remote is added (both system and user level)
 if ! flatpak remote-list | grep -q flathub; then
