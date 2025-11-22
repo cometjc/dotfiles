@@ -13,6 +13,9 @@ fi
 ## install packages on new machine
 #######################
 
+# Ensure platform is set (from common-lib)
+: "${platform:?platform variable must be set by common-lib}"
+
 packages=()
 
 case $platform in

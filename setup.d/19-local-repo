@@ -13,6 +13,9 @@ fi
 ## Replace Ubuntu repository with local mirror
 #######################
 
+# Ensure platform is set (from common-lib)
+: "${platform:?platform variable must be set by common-lib}"
+
 case $platform in
     'linux')
         # Find files containing archive.ubuntu.com using sudo grep

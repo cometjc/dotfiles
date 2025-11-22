@@ -214,6 +214,9 @@ def display_failed_logs(run_id: str, failed_jobs: list[dict]) -> None:
     last_printed_step = None
     last_printed_content = None
     for line in output.split("\n")[-200:]:
+        # Skip lines with GitHub Actions group markers before parsing
+        if "##[group]" in line or "##[endgroup]" in line:
+            continue
         job_name, step_name, content = parse_log_line(line, known_jobs)
         if not job_name:
             continue
@@ -233,9 +236,13 @@ def display_failed_logs(run_id: str, failed_jobs: list[dict]) -> None:
             last_printed_content = None
 
         # Only print content if it's different from the last printed content
-        if content and content != last_printed_content:
-            print(f"    {content}")
-            last_printed_content = content
+        if content:
+            # Filter out GitHub Actions group markers from content
+            if "##[group]" in content or "##[endgroup]" in content:
+                continue
+            if content != last_printed_content:
+                print(f"    {content}")
+                last_printed_content = content
 
 
 def main():
