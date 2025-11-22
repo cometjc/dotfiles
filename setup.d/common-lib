@@ -54,11 +54,15 @@ fail() {
     echo -e "${RED}[FAIL]${NC} $1"
 }
 
-source /etc/lsb-release
-if [[ $DISTRIB_ID = LinuxMint ]] && [[ -f /etc/upstream-release/lsb-release ]]; then
-    # for Linux Mint, we treat it as Ubuntu
+# Only source /etc/lsb-release on Linux systems that have it
+if [[ -f /etc/lsb-release ]]; then
     # shellcheck source=/dev/null
-    source /etc/upstream-release/lsb-release
+    source /etc/lsb-release
+    if [[ $DISTRIB_ID = LinuxMint ]] && [[ -f /etc/upstream-release/lsb-release ]]; then
+        # for Linux Mint, we treat it as Ubuntu
+        # shellcheck source=/dev/null
+        source /etc/upstream-release/lsb-release
+    fi
 fi
 
 case $(uname) in

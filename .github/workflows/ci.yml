@@ -156,9 +156,24 @@ jobs:
             arm64) SHFMT_ARCH="arm64" ;;
             *) SHFMT_ARCH="amd64" ;;
           esac
-          # Get latest version
+          # Get latest version and download URL
           SHFMT_VERSION=$(curl -fsSL https://api.github.com/repos/mvdan/sh/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-          curl -fsSL "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION#v}_linux_${SHFMT_ARCH}" -o /tmp/shfmt
+          # Try different URL formats
+          VERSION_NO_V="${SHFMT_VERSION#v}"
+          if ! curl -fsSL "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${VERSION_NO_V}_linux_${SHFMT_ARCH}" -o /tmp/shfmt; then
+            # Fallback: try with version including 'v' prefix
+            curl -fsSL "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_${SHFMT_ARCH}" -o /tmp/shfmt || {
+              echo "Failed to download shfmt. Trying to find correct URL from release assets..."
+              # Get download URL from release assets
+              DOWNLOAD_URL=$(curl -fsSL "https://api.github.com/repos/mvdan/sh/releases/latest" | grep -o "\"browser_download_url\":\s*\"[^\"]*shfmt[^\"]*linux_${SHFMT_ARCH}[^\"]*\"" | sed -E 's/.*"([^"]+)".*/\1/' | head -1)
+              if [[ -n "$DOWNLOAD_URL" ]]; then
+                curl -fsSL "$DOWNLOAD_URL" -o /tmp/shfmt
+              else
+                echo "Could not find shfmt download URL"
+                exit 1
+              fi
+            }
+          fi
           chmod +x /tmp/shfmt
           sudo mv /tmp/shfmt /usr/local/bin/shfmt
           shfmt --version
