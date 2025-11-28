@@ -155,7 +155,7 @@ skip_script_if_executed() {
         return
     fi
     caller=${BASH_SOURCE[2]##*/}
-    executed_ts=$(getfattr -n user.executed -d "${caller}" 0>/dev/null | sed -n 's/.*="\(.*\)"/\1/p' || echo "")
+    executed_ts=$(getfattr -n user.executed -d "${caller}" 2>/dev/null | sed -n 's/.*="\(.*\)"/\1/p' || echo "")
     if [[ -z "${executed_ts}" ]]; then
         change "Executing..."
         return
