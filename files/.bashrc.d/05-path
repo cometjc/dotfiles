@@ -2,12 +2,17 @@
 #-------------------------------------------------------------
 # customize PATH
 #-------------------------------------------------------------
-
-PATH_append "$HOME/.local/bin"
-PATH_append "$HOME/.cargo/bin"              # rust
-PATH_append "${KREW_ROOT:-$HOME/.krew}/bin" # plugin manager for kubectl
-PATH_append "$HOME/bin/gam7"         # Google Apps Manager
-alias gam="$HOME/bin/gam7/gam"
-PATH_append "$HOME/.local/share/JetBrains/Toolbox/apps"
-PATH_append /usr/local/go/bin
-PATH_append /usr/local/bin
+path_list=(
+	"$HOME/.local/bin"
+	"$HOME/.cargo/bin"              # rust
+	"${KREW_ROOT:-$HOME/.krew}/bin" # plugin manager for kubectl
+	"$HOME/bin/gam7"                # Google Apps Manager
+	"$HOME/.local/share/JetBrains/Toolbox/apps"
+	/usr/local/go/bin
+	/usr/local/bin
+)
+for path in "${path_list[@]}"; do
+	if [[ -d "$path" ]]; then
+		PATH_append "$path"
+	fi
+done
