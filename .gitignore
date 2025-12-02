@@ -1,6 +1,7 @@
 *~
 *.pyc
 # ignore local setting
+/.vscode
 /.gitconfig
 
 *.pyc

@@ -1,54 +1,186 @@
 #!/bin/bash
+# SQLite-based cd history plugin with lock-friendly design
+# Features: dedup, filtering, concurrent-safe operations
 
+export cdhist_db="$HOME/.cd_history.db"
 export cdhist_file="$HOME/.cd_history"
 
-touch "$cdhist_file"
+# Initialize database and ensure table exists
+init_cdhist_db() {
+	sqlite3 "$cdhist_db" <<'EOF' >/dev/null 2>&1
+CREATE TABLE IF NOT EXISTS cd_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    path TEXT NOT NULL,
+    realpath TEXT NOT NULL UNIQUE,
+    last_access INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    access_count INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_realpath ON cd_history(realpath);
+CREATE INDEX IF NOT EXISTS idx_last_access ON cd_history(last_access DESC);
+PRAGMA journal_mode=WAL;
+EOF
+}
+
+# Always initialize database to ensure table exists
+init_cdhist_db
+
+# Migrate old .cd_history file to database (one-time migration)
+migrate_cdhist() {
+	local old_file="$HOME/.cd_history"
+	local valid_file
+	local migrated_count=0
+	local current_time
+
+	# Check if old file exists and database is empty
+	if [[ ! -f "$old_file" ]]; then
+		return 0
+	fi
+
+	# Ensure database is initialized
+	init_cdhist_db
+
+	# Check if database already has entries
+	if sqlite3 "$cdhist_db" "SELECT COUNT(*) FROM cd_history;" 2>/dev/null | grep -q '^[1-9]'; then
+		return 0
+	fi
+
+	valid_file=$(mktemp)
+	current_time=$(date +%s)
+
+	# Read old file, dedup by realpath, keep most recent occurrence
+	# Process in reverse order to preserve most recent access
+	# Use awk for dedup and collect valid paths
+	tac "$old_file" 2>/dev/null | awk '!seen[$0]++' | while IFS= read -r line; do
+		[[ -z "$line" ]] && continue
+
+		# Get realpath and verify directory exists
+		local real_line
+		real_line=$(timeout 0.5 realpath "$line" 2>/dev/null || echo "$line")
+		if [[ -n "$real_line" ]] && timeout 0.5 test -d "$real_line" 2>/dev/null; then
+			# Store path:realpath pairs for batch insertion
+			printf '%s|%s\n' "$line" "$real_line"
+		fi
+	done >"$valid_file"
+
+	# Batch insert into database
+	if [[ -s "$valid_file" ]]; then
+		local offset=0
+		local total_lines
+		total_lines=$(wc -l <"$valid_file" 2>/dev/null || echo 0)
+
+		while IFS='|' read -r path realpath; do
+			# Escape for SQL
+			local real_escaped path_escaped
+			real_escaped=$(printf "%s" "$realpath" | sed "s/'/''/g")
+			path_escaped=$(printf "%s" "$path" | sed "s/'/''/g")
+
+			# Insert with decrementing timestamp to preserve order (most recent first)
+			sqlite3 "$cdhist_db" <<EOF >/dev/null 2>&1
+PRAGMA journal_mode=WAL;
+INSERT OR IGNORE INTO cd_history (realpath, path, last_access, access_count)
+VALUES ('$real_escaped', '$path_escaped', $((current_time - offset)), 1);
+EOF
+			((offset++))
+		done <"$valid_file"
+
+		migrated_count=$total_lines
+
+		# Backup old file after successful migration
+		if ((migrated_count > 0)); then
+			mv "$old_file" "${old_file}.backup.$(date +%Y%m%d_%H%M%S)" 2>/dev/null
+		fi
+	fi
+
+	rm -f "$valid_file"
+}
+
+# Run migration once on first load
+if [[ -f "$cdhist_file" ]]; then
+	(migrate_cdhist &)
+fi
 
 IFS=:
 if [[ ! ":${chpwd_functions[*]}:" =~ :append_cdhist: ]]; then
-    chpwd_functions+=(append_cdhist)
+	chpwd_functions+=(append_cdhist)
 fi
 unset IFS
 
 append_cdhist() {
-    real_dir=$(realpath "$PWD" 2>/dev/null || echo "$PWD")
-    echo "$real_dir" >>"$cdhist_file"
+	local real_dir current_path
+	real_dir=$(realpath "$PWD" 2>/dev/null || echo "$PWD")
+	current_path="$PWD"
+
+	# Escape single quotes for SQL safety
+	real_dir_escaped=$(printf "%s" "$real_dir" | sed "s/'/''/g")
+	current_path_escaped=$(printf "%s" "$current_path" | sed "s/'/''/g")
+
+	# SQLite handles concurrency internally with WAL mode
+	sqlite3 "$cdhist_db" <<EOF >/dev/null 2>&1
+PRAGMA journal_mode=WAL;
+INSERT OR REPLACE INTO cd_history (realpath, path, last_access, access_count)
+VALUES ('$real_dir_escaped', '$current_path_escaped', strftime('%s', 'now'),
+        COALESCE((SELECT access_count FROM cd_history WHERE realpath='$real_dir_escaped'), 0) + 1);
+EOF
 }
 
 cleanup_cdhist() {
-    # Check if lock file exists and is older than 300 seconds
-    if [[ -f "$cdhist_file.lock" ]]; then
-        lock_age=$(($(date +%s) - $(stat -c %Y "$cdhist_file.lock")))
-        if ((lock_age > 300)); then
-            message="Warning: cdhist lock file is older than 300 seconds"
-            tmux list-clients -F "#{client_name}" 2>/dev/null | xargs -I{} tmux display-message -c {} "$message" 2>/dev/null
-            rm -f "$cdhist_file.lock"
-        fi
-    fi
-    # remove duplicates and non-existing directories
-    (
-        flock --nonblock 9 || exit 1
-        tac "$cdhist_file" |
-            awk '!x[$0]++' |
-            while read -r line; do
-                real_line=$(timeout 0.5 realpath "$line" 2>/dev/null || echo "$line")
-                timeout 0.5 test -d "$real_line" && echo "$real_line"
-            done |
-            tac |
-            sponge "$cdhist_file"
-    ) 9>"$cdhist_file.lock"
+	local temp_file
+	temp_file=$(mktemp)
+
+	# Get all paths, check existence, and keep top 1000
+	sqlite3 "$cdhist_db" "SELECT realpath FROM cd_history ORDER BY last_access DESC;" | while read -r line; do
+		if timeout 0.5 test -d "$line" 2>/dev/null; then
+			printf '%s\n' "$line"
+		fi
+	done | head -1000 >"$temp_file"
+
+	# SQLite handles locking internally with WAL mode
+	# Use temporary table for safer deletion
+	if [[ -s "$temp_file" ]]; then
+		sqlite3 "$cdhist_db" <<'EOF' >/dev/null 2>&1
+PRAGMA journal_mode=WAL;
+BEGIN TRANSACTION;
+CREATE TEMP TABLE IF NOT EXISTS valid_paths (realpath TEXT PRIMARY KEY);
+EOF
+		while IFS= read -r line; do
+			line_escaped=$(printf "%s" "$line" | sed "s/'/''/g")
+			sqlite3 "$cdhist_db" "INSERT OR IGNORE INTO temp.valid_paths VALUES ('$line_escaped');" >/dev/null 2>&1
+		done <"$temp_file"
+
+		sqlite3 "$cdhist_db" <<'EOF' >/dev/null 2>&1
+DELETE FROM cd_history WHERE realpath NOT IN (SELECT realpath FROM temp.valid_paths);
+DROP TABLE IF EXISTS temp.valid_paths;
+COMMIT;
+EOF
+	fi
+
+	rm -f "$temp_file"
 }
 
 cd_widget() {
-    # quick dedup filtering on load
-    cd_target="$(tac "$cdhist_file" | awk '!x[$0]++' | sed -e "s@^$HOME@~@" | tac | percol --prompt-bottom --result-bottom-up --reverse)"
-    if ((${#cd_target} != 0)); then
-        # shellcheck disable=SC2164
-        cd "${cd_target/#\~/$HOME}"
-    fi
+	local cd_target temp_list
+	temp_list=$(mktemp)
 
-    # cleanup history in background
-    (cleanup_cdhist &)
+	# Query with dedup, ordered by access frequency and recency
+	# Filter valid directories in a separate step
+	sqlite3 "$cdhist_db" "SELECT DISTINCT path FROM cd_history ORDER BY access_count DESC, last_access DESC LIMIT 200;" | while IFS= read -r line; do
+		if timeout 0.5 test -d "$line" 2>/dev/null; then
+			printf '%s\n' "$line"
+		fi
+	done | head -100 | sed -e "s@^$HOME@~@" >"$temp_list"
+
+	cd_target=$(percol --prompt-bottom --result-bottom-up --reverse <"$temp_list")
+	rm -f "$temp_list"
+
+	if ((${#cd_target} != 0)); then
+		# shellcheck disable=SC2164
+		cd "${cd_target/#\~/$HOME}"
+	fi
+
+	# Cleanup in background (less frequent, SQLite handles concurrency)
+	if ((RANDOM % 10 == 0)); then
+		(cleanup_cdhist &)
+	fi
 }
 
 # if this is interactive shell, then bind hstr to Alt-s (for Vi mode check doc)
