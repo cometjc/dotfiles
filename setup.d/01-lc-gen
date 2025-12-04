@@ -9,5 +9,5 @@ else
     exit 1
 fi
 
-sudo locale-gen --keep-existing zh_TW.UTF-8 lzh_TW.UTF-8
+sudo locale-gen --keep-existing zh_TW zh_TW.UTF-8 zh_CN.UTF-8 en_US.UTF-8
 sudo update-locale
