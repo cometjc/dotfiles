@@ -2,11 +2,11 @@
 # vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
 common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
 if [[ -f "$common_lib" ]]; then
-    # shellcheck source=common-lib
-    . "$common_lib"
+	# shellcheck source=common-lib
+	. "$common_lib"
 else
-    echo "Cannot find common-lib."
-    exit 1
+	echo "Cannot find common-lib."
+	exit 1
 fi
 
 # pipx
@@ -14,32 +14,32 @@ fi
 
 # UV
 if ! command -v uv &>/dev/null; then
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    # Ensure ~/.local/bin is in PATH after installation
-    export PATH="$HOME/.local/bin:$PATH"
+	curl -LsSf https://astral.sh/uv/install.sh | sh
+	# Ensure ~/.local/bin is in PATH after installation
+	export PATH="$HOME/.local/bin:$PATH"
 else
-    uv self update
+	uv self update
 fi
 uv python install 3.12 3.13
 
 tools=(
-    'git+https://github.com/jcppkkk/update-kube-config.git'
-    ansible
-    flameshow
-    git-up
-    percol
-    pipenv
-    poetry
-    pre-commit
-    ruff
+	'git+https://github.com/jcppkkk/update-kube-config.git'
+	ansible
+	flameshow
+	git-up
+	percol
+	pipenv
+	poetry
+	pre-commit
+	ruff
 )
 
 # shellcheck disable=SC2034
 mapfile -t current_tools < <(uv tool list | grep -v "^-" | cut -d" " -f1)
 
 for tool in "${tools[@]}"; do
-    if ! array_contains current_tools "$tool"; then
-        uv tool install "$tool"
-    fi
+	if ! array_contains current_tools "$tool"; then
+		uv tool install "$tool"
+	fi
 done
 uv tool upgrade --all
