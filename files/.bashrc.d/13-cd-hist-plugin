@@ -5,6 +5,11 @@
 export cdhist_db="$HOME/.cd_history.db"
 export cdhist_file="$HOME/.cd_history"
 
+# SQL escape helper: escape single quotes for SQL strings
+sql_quote() {
+	printf "%s" "$1" | sed "s/'/''/g"
+}
+
 # Initialize database and ensure table exists
 init_cdhist_db() {
 	sqlite3 "$cdhist_db" <<'EOF' >/dev/null 2>&1
@@ -13,12 +18,15 @@ CREATE TABLE IF NOT EXISTS cd_history (
     path TEXT NOT NULL,
     realpath TEXT NOT NULL UNIQUE,
     last_access INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-    access_count INTEGER NOT NULL DEFAULT 1
+    access_count INTEGER NOT NULL DEFAULT 1,
+    display_line TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_realpath ON cd_history(realpath);
 CREATE INDEX IF NOT EXISTS idx_last_access ON cd_history(last_access DESC);
 PRAGMA journal_mode=WAL;
 EOF
+	# Add display_line column if it doesn't exist (for migration)
+	sqlite3 "$cdhist_db" "ALTER TABLE cd_history ADD COLUMN display_line TEXT;" 2>/dev/null || true
 }
 
 # Always initialize database to ensure table exists
@@ -69,16 +77,11 @@ migrate_cdhist() {
 		total_lines=$(wc -l <"$valid_file" 2>/dev/null || echo 0)
 
 		while IFS='|' read -r path realpath; do
-			# Escape for SQL
-			local real_escaped path_escaped
-			real_escaped=$(printf "%s" "$realpath" | sed "s/'/''/g")
-			path_escaped=$(printf "%s" "$path" | sed "s/'/''/g")
-
 			# Insert with decrementing timestamp to preserve order (most recent first)
 			sqlite3 "$cdhist_db" <<EOF >/dev/null 2>&1
 PRAGMA journal_mode=WAL;
 INSERT OR IGNORE INTO cd_history (realpath, path, last_access, access_count)
-VALUES ('$real_escaped', '$path_escaped', $((current_time - offset)), 1);
+VALUES ('$(sql_quote "$realpath")', '$(sql_quote "$path")', $((current_time - offset)), 1);
 EOF
 			((offset++))
 		done <"$valid_file"
@@ -110,78 +113,105 @@ append_cdhist() {
 	real_dir=$(realpath "$PWD" 2>/dev/null || echo "$PWD")
 	current_path="$PWD"
 
-	# Escape single quotes for SQL safety
-	real_dir_escaped=$(printf "%s" "$real_dir" | sed "s/'/''/g")
-	current_path_escaped=$(printf "%s" "$current_path" | sed "s/'/''/g")
-
 	# SQLite handles concurrency internally with WAL mode
-	sqlite3 "$cdhist_db" <<EOF >/dev/null 2>&1
+	# Run in background silently to avoid blocking cd command
+	# Calculate prerendered display line and save to database
+	# Start the task in a subshell and immediately disown it to prevent job control messages
+	# The initial [1] PID message may still appear, but the Done message will be suppressed
+	( (
+		local new_access_count new_last_access relative_time path_display display_line
+		# Get new access_count and last_access
+		new_access_count=$(sqlite3 "$cdhist_db" "SELECT COALESCE((SELECT access_count FROM cd_history WHERE realpath='$(sql_quote "$real_dir")'), 0) + 1;" 2>/dev/null)
+		new_last_access=$(date +%s)
+
+		# Format last access time as mm.dd-HH:MM
+		relative_time=$(date -d "@$new_last_access" +"%m.%d %H:%M" 2>/dev/null || date -r "$new_last_access" +"%m.%d-%H:%M" 2>/dev/null || echo "??.??-??:??")
+
+		# Format path display (replace $HOME with ~ and trim whitespace)
+		path_display=$(printf '%s' "$current_path" | sed -e "s@^$HOME@~@" -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
+		# Format display line: [time] [count] path (using static widths)
+		display_line=$(printf '[%11s] [%5d] %s' "$relative_time" "$new_access_count" "$path_display")
+
+		# Update database with prerendered display line
+		sqlite3 "$cdhist_db" <<EOF >/dev/null 2>&1
 PRAGMA journal_mode=WAL;
-INSERT OR REPLACE INTO cd_history (realpath, path, last_access, access_count)
-VALUES ('$real_dir_escaped', '$current_path_escaped', strftime('%s', 'now'),
-        COALESCE((SELECT access_count FROM cd_history WHERE realpath='$real_dir_escaped'), 0) + 1);
+INSERT OR REPLACE INTO cd_history (realpath, path, last_access, access_count, display_line)
+VALUES ('$(sql_quote "$real_dir")', '$(sql_quote "$current_path")', $new_last_access, $new_access_count, '$(sql_quote "$display_line")');
 EOF
+	) &)
 }
 
 cleanup_cdhist() {
-	local temp_file
-	temp_file=$(mktemp)
-
-	# Get all paths, check existence, and keep top 1000
-	sqlite3 "$cdhist_db" "SELECT realpath FROM cd_history ORDER BY last_access DESC;" | while read -r line; do
-		if timeout 0.5 test -d "$line" 2>/dev/null; then
-			printf '%s\n' "$line"
+	# Remove entries for directories that no longer exist
+	# Use id for deletion to avoid SQL escaping
+	sqlite3 "$cdhist_db" "SELECT id, realpath FROM cd_history;" | while IFS='|' read -r entry_id realpath; do
+		if ! timeout 0.5 test -d "$realpath" 2>/dev/null; then
+			sqlite3 "$cdhist_db" "DELETE FROM cd_history WHERE id = $entry_id;" >/dev/null 2>&1
 		fi
-	done | head -1000 >"$temp_file"
+	done
 
-	# SQLite handles locking internally with WAL mode
-	# Use temporary table for safer deletion
-	if [[ -s "$temp_file" ]]; then
-		sqlite3 "$cdhist_db" <<'EOF' >/dev/null 2>&1
+	# SQLite WAL mode handles concurrency internally, can directly operate on DB
+	# First keep top 1000 entries by last_access, then remove non-existent directories
+	# This reduces the number of directories we need to check
+	sqlite3 "$cdhist_db" <<'EOF' >/dev/null 2>&1
 PRAGMA journal_mode=WAL;
-BEGIN TRANSACTION;
-CREATE TEMP TABLE IF NOT EXISTS valid_paths (realpath TEXT PRIMARY KEY);
+DELETE FROM cd_history
+WHERE id NOT IN (
+    SELECT id FROM cd_history
+    ORDER BY last_access DESC
+    LIMIT 1000
+);
 EOF
-		while IFS= read -r line; do
-			line_escaped=$(printf "%s" "$line" | sed "s/'/''/g")
-			sqlite3 "$cdhist_db" "INSERT OR IGNORE INTO temp.valid_paths VALUES ('$line_escaped');" >/dev/null 2>&1
-		done <"$temp_file"
-
-		sqlite3 "$cdhist_db" <<'EOF' >/dev/null 2>&1
-DELETE FROM cd_history WHERE realpath NOT IN (SELECT realpath FROM temp.valid_paths);
-DROP TABLE IF EXISTS temp.valid_paths;
-COMMIT;
-EOF
-	fi
-
-	rm -f "$temp_file"
 }
 
+# Global associative array for caching formatted relative times
+# Key: realpath, Value: last_access|formatted_time|access_count
+declare -A _cd_widget_cache
+
 cd_widget() {
-	local cd_target temp_list
-	temp_list=$(mktemp)
+	local cd_target
 
-	# Query with dedup, ordered by access frequency and recency
-	# Filter valid directories in a separate step
-	sqlite3 "$cdhist_db" "SELECT DISTINCT path FROM cd_history ORDER BY access_count DESC, last_access DESC LIMIT 200;" | while IFS= read -r line; do
-		if timeout 0.5 test -d "$line" 2>/dev/null; then
-			printf '%s\n' "$line"
-		fi
-	done | head -100 | sed -e "s@^$HOME@~@" >"$temp_list"
+	# Check if tty is available for percol
+	if ! tty -s 2>/dev/null; then
+		return 1
+	fi
 
-	cd_target=$(percol --prompt-bottom --result-bottom-up --reverse <"$temp_list")
-	rm -f "$temp_list"
+	# Query prerendered display_line directly from database
+	cd_target=$(percol --prompt-bottom --result-bottom-up <(
+		sqlite3 "$cdhist_db" "SELECT display_line FROM cd_history WHERE display_line IS NOT NULL ORDER BY last_access DESC, access_count DESC LIMIT 100;"
+	) 2>/dev/null)
 
-	if ((${#cd_target} != 0)); then
-		# shellcheck disable=SC2164
-		cd "${cd_target/#\~/$HOME}"
+	# If percol was cancelled or failed, return early
+	if [[ -z "$cd_target" ]]; then
+		return 0
+	fi
+
+	# Extract actual path from display_line format: "[time] [count] path"
+	# Format: [%11s] [%5d] %s, prefix is fixed 22 characters (1+11+1+1+1+5+1+1)
+	# Path is already trimmed when appended, so no need to trim again
+	cd_target="${cd_target:22}"
+
+	# Expand ~ to $HOME
+	if [[ "$cd_target" == ~* ]]; then
+		cd_target="${cd_target/#\~/$HOME}"
 	fi
 
 	# Cleanup in background (less frequent, SQLite handles concurrency)
 	if ((RANDOM % 10 == 0)); then
 		(cleanup_cdhist &)
 	fi
+
+	# Change directory
+	# Use cd instead of builtin cd to trigger chpwd_functions hook
+	# This will automatically call append_cdhist and other hooks like _mise_hook
+	cd "$cd_target"
 }
 
-# if this is interactive shell, then bind hstr to Alt-s (for Vi mode check doc)
-if [[ $- =~ .*i.* ]]; then bind -x '"\es": "cd_widget"'; fi
+# if this is interactive shell, then bind cd_widget using two-layer binding
+# 1. Bind the actual command using -x
+# 2. Bind the key we actually call, which invokes the -x binding and adds newline to update prompt
+if [[ $- =~ .*i.* ]]; then
+	bind -x '"\C-x\C-s": "cd_widget"'
+	bind '"\es": "\C-x\C-s\n"'
+fi
