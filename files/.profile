@@ -14,15 +14,13 @@ export LANGUAGE="en"
 
 # if running bash
 if [ -n "$BASH_VERSION" ]; then
-    # include .bashrc if it exists
-    if [ -f "$HOME/.bashrc" ]; then
-    export BPATH="$PATH"
-    . "$HOME/.bashrc"
-    fi
+	# include .bashrc if it exists
+	if [ -f "$HOME/.bashrc" ]; then
+		export BPATH="$PATH"
+		. "$HOME/.bashrc"
+	fi
 fi
 
 export XMODIFIERS=@im=fcitx
 export GTK_IM_MODULE=fcitx
 export QT_IM_MODULE=fcitx
-
-. "$HOME/.local/bin/env"
