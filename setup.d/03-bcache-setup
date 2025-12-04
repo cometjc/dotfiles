@@ -24,7 +24,8 @@ find /sys/fs/bcache/ -mindepth 1 -maxdepth 1 -type d 2>/dev/null | while read -r
 done
 
 find /sys/block -maxdepth 1 -name 'bcache*' -type l 2>/dev/null | while read -r bcache; do
-    sudo bash -v -c "\
-        echo 0 > '$bcache/bcache/writeback_percent'\
-        "
+    sudo bash -v -c "
+echo 0 > '$bcache/bcache/writeback_percent'
+echo 67108864 > '$bcache/bcache/sequential_cutoff'
+"
 done
