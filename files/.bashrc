@@ -73,7 +73,7 @@ fi
 alias more='less'
 export EDITOR=vim
 export PAGER='less'
-export LESS='-i -z-4 -MFXRS -x4'
+export LESS='-i -z-4 -MFXR -x4'
 export LESSCHARDEF="8bcccbcc18b95.."
 export LESS_TERMCAP_mb='[1;31m' # begin blinking
 export LESS_TERMCAP_md='[4;32m' # begin bold
@@ -315,5 +315,18 @@ include_scripts
 # Task Master aliases added on 2025/7/24
 alias tm='task-master'
 alias taskmaster='task-master'
+source /data/repo/sre/bashrc
+eval "$(direnv hook bash)"
+
+# Added by `rbenv init` on 西元2025年08月20日 (週三) 10時26分09秒 CST
+eval "$(~/.rbenv/bin/rbenv init - --no-rehash bash)"
+
+# Manually force AI terminals to load the VSCode shell integration goop.
+if [[ "$CURSOR_AGENT" = 1 ]]; then
+    # shellcheck source=/dev/null
+    source "$(cursor --locate-shell-integration-path bash)"
+    set -gx PAGER "cat"
+    set -gx GIT_PAGER "cat"
+fi
 
 complete -C ~/.local/bin/mc mc
