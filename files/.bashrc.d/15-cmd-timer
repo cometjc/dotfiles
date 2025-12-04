@@ -70,6 +70,10 @@ command_tracking_end() {
 	return $previous_exit_status
 }
 
+if [[ -n "$CURSOR_AGENT" ]]; then
+    return
+fi
+
 if [[ $- =~ .*i.* ]]; then
 	while trap -p | grep -q command_tracking_start; do trap - DEBUG; done
 	trap 'command_tracking_start' DEBUG
