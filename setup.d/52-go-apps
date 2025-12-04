@@ -10,7 +10,7 @@ else
 fi
 
 eval "$("$HOME/.local/bin/mise" activate bash)"
-mise use --global go@1.23
+mise use --global go@latest
 eval "$("$HOME/.local/bin/mise" activate bash)"
 
 packages=(
@@ -20,6 +20,8 @@ packages=(
     'mvdan.cc/sh/v3/cmd/shfmt@latest'
     'github.com/nao1215/gup@latest'
     'github.com/mikefarah/yq/v4@latest'
+    'github.com/google/yamlfmt/cmd/yamlfmt@latest'
+    'github.com/ericchiang/pup@latest'
 )
 
 for pkg in "${packages[@]}"; do
