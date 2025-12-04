@@ -71,6 +71,7 @@ let g:ale_fixers = {
 			\ 'go': ['gofmt', 'goimports']
 			\}
 let g:ale_sh_shfmt_options = '-i 4 -ci -bn'
+let g:ale_sh_shellcheck_options = '-x -S warning'
 
 
 """"""""""""""""""" language support - others
@@ -93,7 +94,12 @@ Plug 'wellle/context.vim'
 Plug 'mileszs/ack.vim'
 let g:ackprg = 'rg --vimgrep --smart-case'
 nnoremap <silent> <Leader>rg :Ack <C-R><C-W><CR>
-Plug 'jvirtanen/vim-hcl'
+Plug 'jvirtanen/vim-hcl'       " HCL 語法高亮 (Terraform/Packer/Consul/Nomad/Vault)
+Plug 'NoahTheDuke/vim-just'    " Justfile 語法高亮 (just 命令工具)
+Plug 'madox2/vim-ai'           " AI 程式碼助手 (OpenAI/ChatGPT 整合)
+Plug 'LucHermitte/lh-vim-lib'  " Vim 函式庫 (其他插件的依賴)
+command! -nargs=? WTF call lh#exception#say_what(<q-args>)
+
 
 """"""""""""""""""" language support - Docker
 Plug 'ekalinin/Dockerfile.vim'
@@ -105,8 +111,6 @@ let g:python_highlight_all = 1
 """"""""""""""""""" language support - C / C++
 Plug 'vim-scripts/cuteErrorMarker'
 autocmd FileType qf wincmd J
-"========================== language support - csv
-Plug 'chrisbra/csv.vim'
 "========================== language support - ruby
 Plug 'vim-ruby/vim-ruby'
 Plug 'ngmy/vim-rubocop'
@@ -285,9 +289,9 @@ let g:netrw_localcopydir = '/tmp/vim_netrw'
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " searching...
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-set hlsearch                   " enable search highlight globally
-set incsearch                  " show matches as soon as possible
-set showmatch                  " show matching brackets when typing
+set hlsearch                    " enable search highlight globally
+set incsearch                   " show matches as soon as possible
+set showmatch                   " show matching brackets when typing
 
 set diffopt=filler,iwhite       " ignore all whitespace and sync
 
