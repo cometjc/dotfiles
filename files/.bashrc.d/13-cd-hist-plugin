@@ -131,7 +131,9 @@ append_cdhist() {
 		path_display=$(printf '%s' "$current_path" | sed -e "s@^$HOME@~@" -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
 
 		# Format display line: [time] [count] path (using static widths)
-		display_line=$(printf '[%11s] [%5d] %s' "$relative_time" "$new_access_count" "$path_display")
+		# Limit access_count to 99999 to ensure fixed-width format (5 digits max)
+		display_count=$((new_access_count > 99999 ? 99999 : new_access_count))
+		display_line=$(printf '[%11s] [%5d] %s' "$relative_time" "$display_count" "$path_display")
 
 		# Update database with prerendered display line
 		sqlite3 "$cdhist_db" <<EOF >/dev/null 2>&1
@@ -189,6 +191,7 @@ cd_widget() {
 
 	# Extract actual path from display_line format: "[time] [count] path"
 	# Format: [%11s] [%5d] %s, prefix is fixed 22 characters (1+11+1+1+1+5+1+1)
+	# Note: access_count is capped at 99999 to maintain fixed-width format
 	# Path is already trimmed when appended, so no need to trim again
 	cd_target="${cd_target:22}"
 
