@@ -37,4 +37,6 @@ load_powerline() {
     patch_function _powerline_prompt 'echo -n " "'
 }
 
-load_powerline
+if [[ -z "$CURSOR_AGENT" ]]; then
+    load_powerline
+fi
