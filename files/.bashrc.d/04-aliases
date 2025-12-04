@@ -265,11 +265,66 @@ gitignore() {
     done
 }
 
+# 將此函數加入到您的 ~/.bashrc 或 ~/.zshrc 檔案中
+
+function branch-this() {
+    local new_branch_name="$1"
+    local current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+    # 檢查是否有提供分支名稱
+    if [ -z "$new_branch_name" ]; then
+        echo "用法: branch-this <新分支名稱>"
+        echo "範例: branch-this feat/my-new-feature"
+        return 1
+    fi
+
+    # 檢查目前是否在 master 分支上
+    if [ "$current_branch" != "master" ]; then
+        echo "錯誤: 請先切換到 'master' 分支再執行此功能。"
+        echo "目前您在 '$current_branch' 分支上。"
+        return 1
+    fi
+
+    echo "--- 開始執行 'branch-this $new_branch_name' ---"
+
+    # 1. 建立一個新的分支來保留當前 commit
+    # 注意：這裡的 git branch 不會切換分支，只是建立
+    echo "1. 正在從目前的 HEAD 建立新分支 '$new_branch_name'..."
+    git branch "$new_branch_name"
+    if [ $? -ne 0 ]; then
+        echo "錯誤: 建立分支 '$new_branch_name' 失敗。可能該分支已存在？"
+        return 1
+    fi
+
+    # 2. 設定新分支追蹤 origin/master
+    echo "2. 正在設定 '$new_branch_name' 追蹤 'origin/master'..."
+    git branch --set-upstream-to=origin/master "$new_branch_name"
+    if [ $? -ne 0 ]; then
+        echo "警告: 設定 '$new_branch_name' 追蹤 'origin/master' 失敗。"
+        echo "您可能需要手動執行: git branch --set-upstream-to=origin/master $new_branch_name"
+        # 不返回錯誤，讓後續步驟繼續
+    fi
+
+    # 3. 將 master 分支重設到 origin/master
+    echo "3. 正在將 'master' 分支重設到 'origin/master'..."
+    echo "   警告: 'git reset --hard' 會丟棄 'master' 上所有在 'origin/master' 之後的本地變更。"
+    git reset --hard origin/master
+    if [ $? -ne 0 ]; then
+        echo "錯誤: 重設 'master' 分支到 'origin/master' 失敗。"
+        return 1
+    fi
+
+    echo "--- 'branch-this $new_branch_name' 操作完成！ ---"
+    echo "現在 '$new_branch_name' 分支保留了您原先的最新 commit。"
+    echo "而 'master' 分支已重設到 'origin/master'。"
+    echo "您可以切換到新分支進行後續開發: git checkout $new_branch_name"
+}
+
 #-------------------------------------------------------------
 # Search Code
 #-------------------------------------------------------------
 #
-alias ag='ag --hidden --ignore=.git --ignore=tags --ignore="*~"'
+alias ag='\ag --hidden --ignore=.git --ignore=tags --ignore="*~"'
 vag() {
     if [[ $1 == -rn ]]; then
         shift
@@ -278,6 +333,39 @@ vag() {
     ag --hidden --ignore .git/ --ignore .tags --ignore "*~" --vimgrep "$*" >"$tmp"
     vim -c "cfile $tmp" -c "1bd"
     rm -f "$tmp"
+}
+
+ags() {
+    if [ $# -lt 2 ]; then
+        echo "用法: ags <ag_pattern> <sed_subst> [ag 其他參數]" >&2
+        echo "範例: ags 'TODO' 's/old/new/g' --js" >&2
+        return 2
+    fi
+
+    local ag_pattern="$1"
+    local sed_subst="$2"
+    shift 2
+    if ! command -v ag >/dev/null 2>&1; then
+        echo "錯誤: 找不到 ag (The Silver Searcher)." >&2
+        return 1
+    fi
+
+    # 為不同作業系統準備 sed -i 的參數（macOS 要空字串作為備份參數）
+    local uname_s
+    uname_s=$(uname)
+    local sed_args
+    if [ "$uname_s" = "Darwin" ]; then
+        sed_args=(-i '' -E -e)
+    else
+        sed_args=(-i -E -e)
+    fi
+
+    # 用 ag 列出 null 分隔的檔案清單，逐一以 sed 就地替換
+    local file
+    while IFS= read -r -d '' file; do
+        [ -z "$file" ] && continue
+        sed "${sed_args[@]}" "$sed_subst" -- "$file"
+    done < <(ag -0 -l -- "$ag_pattern" "$@")
 }
 
 #-------------------------------------------------------------
@@ -299,5 +387,108 @@ alias dp='docker push'
 alias dip='docker inspect --format "{{.NetworkSettings.IPAddress}}"'
 alias rmi='docker rmi'
 alias k9s='LC_ALL=C \k9s'
+
+# Git diff files in time ordering
+gdt() {
+    # 顯示類似 git diff --stat 的輸出，包含日期時間和未追蹤文件
+    # 用法: gdt [git diff 參數]
+
+    # 收集所有文件信息
+    local all_files=()
+    local file_info=()
+
+    # 獲取已修改/已暫存的文件
+    while IFS= read -r file; do
+        if [ -f "$file" ]; then
+            all_files+=("$file")
+        fi
+    done < <(git diff --name-only "$@" 2>/dev/null)
+
+    # 獲取未追蹤的文件
+    while IFS= read -r file; do
+        if [ -f "$file" ]; then
+            all_files+=("$file")
+        fi
+    done < <(git ls-files --others --exclude-standard 2>/dev/null)
+
+    if [ ${#all_files[@]} -eq 0 ]; then
+        echo "沒有文件變更"
+        return 0
+    fi
+
+    # 處理每個文件
+    for file in "${all_files[@]}"; do
+        # 獲取文件修改時間
+        local mtime=""
+        local datetime=""
+        if command -v stat >/dev/null 2>&1; then
+            mtime=$(stat -c %Y "$file" 2>/dev/null || stat -f %m "$file" 2>/dev/null)
+            if [ -n "$mtime" ]; then
+                datetime=$(date -d "@$mtime" "+%m-%d %H:%M" 2>/dev/null || date -r "$mtime" "+%m-%d %H:%M" 2>/dev/null)
+            fi
+        fi
+
+        # 獲取 git 狀態和統計
+        local status=""
+        local stats=""
+
+        if git ls-files --error-unmatch -- "$file" >/dev/null 2>&1; then
+            # 文件在 git 中
+            if git diff --cached --quiet -- "$file" 2>/dev/null; then
+                if git diff --quiet -- "$file" 2>/dev/null; then
+                    status="staged"
+                else
+                    status="modified"
+                    # 獲取變更統計
+                    local diff_stat=$(git diff --numstat -- "$file" 2>/dev/null | head -1)
+                    if [ -n "$diff_stat" ]; then
+                        local added=$(echo "$diff_stat" | cut -f1)
+                        local deleted=$(echo "$diff_stat" | cut -f2)
+                        if [ "$added" = "-" ] && [ "$deleted" = "-" ]; then
+                            stats="binary"
+                        else
+                            stats="$(printf "%4s +%s -%s" "" "$added" "$deleted")"
+                        fi
+                    fi
+                fi
+            else
+                status="staged"
+                # 獲取暫存區統計
+                local diff_stat=$(git diff --cached --numstat -- "$file" 2>/dev/null | head -1)
+                if [ -n "$diff_stat" ]; then
+                    local added=$(echo "$diff_stat" | cut -f1)
+                    local deleted=$(echo "$diff_stat" | cut -f2)
+                    if [ "$added" = "-" ] && [ "$deleted" = "-" ]; then
+                        stats="binary"
+                    else
+                        stats="$(printf "%4s +%s -%s" "" "$added" "$deleted")"
+                    fi
+                fi
+            fi
+        else
+            # 未追蹤文件
+            status="untracked"
+            local file_size=$(wc -l <"$file" 2>/dev/null || echo "0")
+            stats="$(printf "%4s +%s" "" "$file_size")"
+        fi
+
+        # 存儲文件信息：時間戳|狀態|統計|文件路徑|日期時間
+        file_info+=("$mtime|$status|$stats|$file|$datetime")
+    done
+
+    # 按時間戳排序（最新的在前）
+    IFS=$'\n' sorted_files=($(sort -n <<<"${file_info[*]}"))
+    unset IFS
+
+    # 準備輸出數據
+    local output_lines=()
+    for line in "${sorted_files[@]}"; do
+        IFS='|' read -r mtime status stats file datetime <<<"$line"
+        output_lines+=("$datetime|$stats|$file")
+    done
+
+    # 使用 column 命令對齊表格
+    printf "%s\n" "${output_lines[@]}" | column -s '|' -t
+}
 
 complete -F _complete_alias "${!BASH_ALIASES[@]}"
