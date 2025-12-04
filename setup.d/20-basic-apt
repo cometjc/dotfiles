@@ -58,7 +58,6 @@ case $platform in
             # Development tools
             build-essential
             cmake
-            direnv
             dos2unix
             exuberant-ctags
             git
@@ -79,6 +78,7 @@ case $platform in
             xclip
             remmina remmina-plugin-rdp
             xdotool # cursor-autopilot
+            solaar  # logitech tool
             # Mint clipboard manager
             copyq
         )
