@@ -25,9 +25,21 @@
 	autocrlf = input
 	editor = vim
 	excludesfile = ~/.gitignore_global
-#	pager = delta
 	preloadindex = true
 	whitespace = cr-at-eol
+# Delta https://github.com/dandavison/delta
+[core]
+	pager = delta
+[interactive]
+	diffFilter = delta --color-only --diff-so-fancy
+[delta]
+	navigate = true      # use n and N to move between diff sections
+	dark = true          # or light = true, or omit for auto-detection
+	line-numbers = true
+	true-color = always
+	hyperlinks = true
+####
+
 [credential]
 	helper = cache --timeout=86400
 [diff]
@@ -69,8 +81,8 @@
 [rerere]
 	autoupdate = true
 	enabled = 1
-#[sequence]
-#	editor = interactive-rebase-tool
+[sequence]
+	editor = interactive-rebase-tool
 [status]
 	submoduleSummary = false
 [alias]
@@ -83,14 +95,9 @@
 		git config --local --add push.pushOption \"merge_request.merge_when_pipeline_succeeds\"; \
 		git config --local --add push.pushOption \"merge_request.remove_source_branch\"; \
 		}; f"
-	dunk = !git diff | dunk
 [fetch]
 	prune = true
-#[interactive]
-#	diffFilter = delta --color-only
-[delta]
-	navigate = true
-	side-by-side = true
+	showForcedUpdates = true
 [filter "lfs"]
 	clean = git-lfs clean -- %f
 	smudge = git-lfs smudge -- %f
