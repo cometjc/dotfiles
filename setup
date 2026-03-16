@@ -6,6 +6,73 @@ if [[ $EUID -eq 0 ]]; then
 fi
 cd "$(dirname "$0")" || exit
 here=$(pwd)
+steps_dir="${SETUP_STEPS_DIR:-$here/setup.d}"
+force_setup=0
+dry_run=0
+only_step=""
+from_step=""
+setup_status_dir=""
+step_run_args=()
+selected_steps=()
+executed_steps=()
+skipped_steps=()
+warned_steps=()
+failed_step=""
+
+usage() {
+    cat <<'EOF'
+Usage: ./setup [-f|--force] [--dry-run] [--only STEP | --from STEP]
+
+Options:
+  -f, --force   Force selected setup steps to run even if already executed
+      --dry-run Print selected steps without executing them
+      --only    Run only the named setup step
+      --from    Run the named step and all later steps
+EOF
+}
+
+while (($# > 0)); do
+    case "$1" in
+        -f | --force)
+            force_setup=1
+            shift
+            ;;
+        --dry-run)
+            dry_run=1
+            shift
+            ;;
+        --only)
+            only_step="${2:-}"
+            [[ -n "$only_step" ]] || {
+                echo "--only requires a step name" >&2
+                exit 1
+            }
+            shift 2
+            ;;
+        --from)
+            from_step="${2:-}"
+            [[ -n "$from_step" ]] || {
+                echo "--from requires a step name" >&2
+                exit 1
+            }
+            shift 2
+            ;;
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [[ -n "$only_step" && -n "$from_step" ]]; then
+    echo "--only and --from cannot be used together" >&2
+    exit 1
+fi
 
 # ensure attr package is installed for getfattr/setfattr commands
 common_lib="$here/setup.d/common-lib"
@@ -14,37 +81,142 @@ if [[ -f "$common_lib" ]]; then
     . "$common_lib"
 fi
 
-cd setup.d || exit 1
-if [[ " $* " == *" -f "* ]]; then
-    arg="--arg=-f"
-fi
 ensure_pkg attr
-# shellcheck disable=SC2086
-run-parts --exit-on-error --regex='[0-9][0-9]-*' $arg .
+
+discover_setup_steps() {
+    find "$steps_dir" -maxdepth 1 -type f -regextype posix-extended -regex '.*/[0-9][0-9]-.*' -printf '%f\n' | sort
+}
+
+validate_step() {
+    local step="$1"
+    local step_path="$steps_dir/$step"
+    local first_line
+    [[ -f "$step_path" ]] || {
+        echo "Setup step not found: $step" >&2
+        return 1
+    }
+    [[ -x "$step_path" ]] || {
+        echo "Setup step is not executable: $step" >&2
+        return 1
+    }
+    IFS= read -r first_line <"$step_path" || true
+    [[ "$first_line" == '#!'* ]] || {
+        echo "Setup step is missing a shebang: $step" >&2
+        return 1
+    }
+}
+
+select_steps() {
+    local all_steps=()
+    local step
+    local include=0
+    mapfile -t all_steps < <(discover_setup_steps)
+
+    if [[ -n "$only_step" ]]; then
+        validate_step "$only_step" || exit 1
+        selected_steps=("$only_step")
+        return
+    fi
+
+    if [[ -n "$from_step" ]]; then
+        validate_step "$from_step" || exit 1
+        for step in "${all_steps[@]}"; do
+            if [[ "$step" == "$from_step" ]]; then
+                include=1
+            fi
+            if ((include)); then
+                selected_steps+=("$step")
+            fi
+        done
+        return
+    fi
+
+    selected_steps=("${all_steps[@]}")
+}
+
+record_summary_status() {
+    local step="$1"
+    local status="$2"
+    case "$status" in
+        executed) executed_steps+=("$step") ;;
+        skip) skipped_steps+=("$step") ;;
+        warn) warned_steps+=("$step") ;;
+        fail) failed_step="$step" ;;
+    esac
+}
+
+print_summary() {
+    echo "Summary:"
+    echo "  Selected: ${#selected_steps[@]}"
+    echo "  Executed: ${#executed_steps[@]}"
+    echo "  Skipped: ${#skipped_steps[@]}"
+    echo "  Warned: ${#warned_steps[@]}"
+    if [[ -n "$failed_step" ]]; then
+        echo "  First failed step: $failed_step"
+    fi
+}
+
+run_selected_steps() {
+    local step
+    local step_status
+    setup_status_dir="$(mktemp -d)"
+    export SETUP_STATUS_DIR="$setup_status_dir"
+
+    if ((force_setup)); then
+        step_run_args+=("-f")
+    fi
+
+    for step in "${selected_steps[@]}"; do
+        validate_step "$step" || exit 1
+        if ((dry_run)); then
+            echo "[DRY-RUN] $step"
+            continue
+        fi
+
+        rm -f "$setup_status_dir/$step"
+        (
+            cd "$steps_dir" || exit 1
+            "./$step" "${step_run_args[@]}"
+        )
+        step_status="$(cat "$setup_status_dir/$step" 2>/dev/null || echo "executed")"
+        record_summary_status "$step" "$step_status"
+    done
+}
+
+select_steps
+run_selected_steps
 
 #######################
 ## Local changes
 #######################
-# Setup self default using rebase when pull
-git config branch.master.rebase true
+if ((dry_run)); then
+    echo "Skipping finalize steps in dry-run mode"
+elif [[ -n "$only_step" || -n "$from_step" || "${SETUP_SKIP_FINALIZE:-0}" == "1" ]]; then
+    echo "Skipping finalize steps for partial or test setup run"
+else
+    # Setup self default using rebase when pull
+    git config branch.master.rebase true
 
-# Install pre-commit hooks
-export PATH="$HOME/.local/bin:$PATH"
-if ! command -v pre-commit >/dev/null 2>&1; then
-    if command -v uv >/dev/null 2>&1; then
-        uv tool install --reinstall pre-commit
-    else
-        echo "pre-commit not found and uv is unavailable" 1>&2
-        exit 1
+    # Install pre-commit hooks
+    export PATH="$HOME/.local/bin:$PATH"
+    if ! command -v pre-commit >/dev/null 2>&1; then
+        if command -v uv >/dev/null 2>&1; then
+            uv tool install --reinstall pre-commit
+        else
+            echo "pre-commit not found and uv is unavailable" 1>&2
+            exit 1
+        fi
+    fi
+    ensure_user_owned_dir "$HOME/.cache/pre-commit"
+    pre-commit install
+
+    # Daily Update dotfiles repo
+    if ! (crontab -l 2>/dev/null | grep -q git_update_dotfiles.bash); then
+        (
+            crontab -l 2>/dev/null || true
+            echo "@daily $here/git_update_dotfiles.bash"
+        ) | crontab -
     fi
 fi
-ensure_user_owned_dir "$HOME/.cache/pre-commit"
-pre-commit install
 
-# Daily Update dotfiles repo
-if ! (crontab -l 2>/dev/null | grep -q git_update_dotfiles.bash); then
-    (
-        crontab -l 2>/dev/null || true
-        echo "@daily $here/git_update_dotfiles.bash"
-    ) | crontab -
-fi
+print_summary

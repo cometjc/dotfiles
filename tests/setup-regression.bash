@@ -17,6 +17,17 @@ assert_eq() {
     fi
 }
 
+create_temp_setup_repo() {
+    local temp_repo
+    temp_repo="$(mktemp -d)"
+    mkdir -p "$temp_repo/setup.d" "$temp_repo/files/.bashrc.d"
+    cp "$repo_root/setup" "$temp_repo/setup"
+    cp "$repo_root/setup.d/common-lib" "$temp_repo/setup.d/common-lib"
+    cp "$repo_root/files/.bashrc.d/02-functions" "$temp_repo/files/.bashrc.d/02-functions"
+    chmod +x "$temp_repo/setup"
+    printf '%s\n' "$temp_repo"
+}
+
 test_00_dotfiles_replaces_existing_directory_with_symlink() {
     local temp_home
     temp_home="$(mktemp -d)"
@@ -564,6 +575,114 @@ EOF
         || fail "setup should still run pre-commit install after bootstrapping"
 }
 
+test_setup_dry_run_reports_selected_steps_without_execution() {
+    local temp_repo
+    temp_repo="$(create_temp_setup_repo)"
+    trap 'rm -rf "$temp_repo"' RETURN
+
+    cat >"$temp_repo/setup.d/10-alpha" <<'EOF'
+#!/bin/bash
+echo executed-alpha >"$HOME/alpha.out"
+EOF
+    cat >"$temp_repo/setup.d/20-beta" <<'EOF'
+#!/bin/bash
+echo executed-beta >"$HOME/beta.out"
+EOF
+    chmod +x "$temp_repo/setup.d/10-alpha" "$temp_repo/setup.d/20-beta"
+
+    local temp_home="$temp_repo/home"
+    mkdir -p "$temp_home"
+    local output
+    output="$(
+        HOME="$temp_home" SETUP_SKIP_FINALIZE=1 bash -lc "cd '$temp_repo' && ./setup --dry-run" 2>&1
+    )" || fail "setup --dry-run should succeed"
+
+    [[ ! -e "$temp_home/alpha.out" ]] || fail "setup --dry-run should not execute selected steps"
+    [[ ! -e "$temp_home/beta.out" ]] || fail "setup --dry-run should not execute selected steps"
+    printf '%s\n' "$output" | grep -F "[DRY-RUN] 10-alpha" >/dev/null || fail "setup --dry-run should report 10-alpha"
+    printf '%s\n' "$output" | grep -F "[DRY-RUN] 20-beta" >/dev/null || fail "setup --dry-run should report 20-beta"
+}
+
+test_setup_only_runs_selected_step() {
+    local temp_repo
+    temp_repo="$(create_temp_setup_repo)"
+    trap 'rm -rf "$temp_repo"' RETURN
+
+    cat >"$temp_repo/setup.d/10-alpha" <<'EOF'
+#!/bin/bash
+echo executed-alpha >"$HOME/alpha.out"
+EOF
+    cat >"$temp_repo/setup.d/20-beta" <<'EOF'
+#!/bin/bash
+echo executed-beta >"$HOME/beta.out"
+EOF
+    chmod +x "$temp_repo/setup.d/10-alpha" "$temp_repo/setup.d/20-beta"
+
+    local temp_home="$temp_repo/home"
+    mkdir -p "$temp_home"
+    HOME="$temp_home" SETUP_SKIP_FINALIZE=1 bash -lc "cd '$temp_repo' && ./setup --only 20-beta" >/tmp/test-setup-only.log 2>&1 \
+        || {
+            cat /tmp/test-setup-only.log >&2
+            fail "setup --only should succeed"
+        }
+
+    [[ ! -e "$temp_home/alpha.out" ]] || fail "setup --only should skip unselected steps"
+    [[ -e "$temp_home/beta.out" ]] || fail "setup --only should execute the selected step"
+}
+
+test_setup_from_runs_steps_from_selected_point() {
+    local temp_repo
+    temp_repo="$(create_temp_setup_repo)"
+    trap 'rm -rf "$temp_repo"' RETURN
+
+    cat >"$temp_repo/setup.d/10-alpha" <<'EOF'
+#!/bin/bash
+echo executed-alpha >"$HOME/alpha.out"
+EOF
+    cat >"$temp_repo/setup.d/20-beta" <<'EOF'
+#!/bin/bash
+echo executed-beta >"$HOME/beta.out"
+EOF
+    cat >"$temp_repo/setup.d/30-gamma" <<'EOF'
+#!/bin/bash
+echo executed-gamma >"$HOME/gamma.out"
+EOF
+    chmod +x "$temp_repo/setup.d/10-alpha" "$temp_repo/setup.d/20-beta" "$temp_repo/setup.d/30-gamma"
+
+    local temp_home="$temp_repo/home"
+    mkdir -p "$temp_home"
+    HOME="$temp_home" SETUP_SKIP_FINALIZE=1 bash -lc "cd '$temp_repo' && ./setup --from 20-beta" >/tmp/test-setup-from.log 2>&1 \
+        || {
+            cat /tmp/test-setup-from.log >&2
+            fail "setup --from should succeed"
+        }
+
+    [[ ! -e "$temp_home/alpha.out" ]] || fail "setup --from should skip earlier steps"
+    [[ -e "$temp_home/beta.out" ]] || fail "setup --from should execute the starting step"
+    [[ -e "$temp_home/gamma.out" ]] || fail "setup --from should execute later steps"
+}
+
+test_setup_fails_for_non_executable_step() {
+    local temp_repo
+    temp_repo="$(create_temp_setup_repo)"
+    trap 'rm -rf "$temp_repo"' RETURN
+
+    cat >"$temp_repo/setup.d/10-alpha" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod 0644 "$temp_repo/setup.d/10-alpha"
+
+    local temp_home="$temp_repo/home"
+    mkdir -p "$temp_home"
+    if HOME="$temp_home" SETUP_SKIP_FINALIZE=1 bash -lc "cd '$temp_repo' && ./setup" >/tmp/test-setup-executable.log 2>&1; then
+        fail "setup should fail when a selected step is not executable"
+    fi
+
+    grep -F "is not executable" /tmp/test-setup-executable.log >/dev/null \
+        || fail "setup should explain that the step is not executable"
+}
+
 test_powerline_theme_skips_cleanly_without_powerline_daemon() {
     local temp_dir
     temp_dir="$(mktemp -d)"
@@ -600,6 +719,10 @@ test_70_powerline_repairs_root_owned_uv_cache
 test_53_python_apps_is_executable
 test_53_python_apps_removes_malformed_uv_tools
 test_setup_bootstraps_pre_commit_from_uv
+test_setup_dry_run_reports_selected_steps_without_execution
+test_setup_only_runs_selected_step
+test_setup_from_runs_steps_from_selected_point
+test_setup_fails_for_non_executable_step
 test_powerline_theme_skips_cleanly_without_powerline_daemon
 
 echo "All setup regression tests passed"

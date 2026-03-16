@@ -54,6 +54,11 @@ fail() {
     echo -e "${RED}[FAIL]${NC} $1"
 }
 
+warn() {
+    export setup_warned=1
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
 # Only source /etc/lsb-release on Linux systems that have it
 if [[ -f /etc/lsb-release ]]; then
     # shellcheck source=/dev/null
@@ -149,6 +154,15 @@ setup_script_output_prefix() {
     exec 2> >(sed -E "s#^#${YELLOW}[$caller]${NC} #" >&6)
 }
 
+record_setup_status() {
+    local status="$1"
+    local caller
+    caller=${BASH_SOURCE[2]##*/}
+    if [[ -n "${SETUP_STATUS_DIR:-}" && -n "$caller" ]]; then
+        printf '%s\n' "$status" >"$SETUP_STATUS_DIR/$caller"
+    fi
+}
+
 skip_script_if_executed() {
     if [[ " $* " = *" -f "* ]]; then
         change "Force setup enabled, executing..."
@@ -168,6 +182,7 @@ skip_script_if_executed() {
     file_ts=$(stat -c %Y "${caller}")
     if ((executed_ts > file_ts)); then
         pass "Script already executed, skipping"
+        record_setup_status skip
         export skipped=1
         exit
     fi
@@ -189,8 +204,16 @@ mark_script_executed() {
 }
 
 cleanup() {
-    if (($? == 0)) && [[ -z "${skipped}" ]]; then
+    local exit_status=$?
+    if ((exit_status == 0)) && [[ -z "${skipped}" ]]; then
         mark_script_executed
+        if [[ -n "${setup_warned:-}" ]]; then
+            record_setup_status warn
+        else
+            record_setup_status executed
+        fi
+    elif ((exit_status != 0)) && [[ -z "${skipped}" ]]; then
+        record_setup_status fail
     fi
 }
 
