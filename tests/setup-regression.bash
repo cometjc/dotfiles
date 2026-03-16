@@ -564,6 +564,32 @@ EOF
         || fail "setup should still run pre-commit install after bootstrapping"
 }
 
+test_powerline_theme_skips_cleanly_without_powerline_daemon() {
+    local temp_dir
+    temp_dir="$(mktemp -d)"
+    trap 'rm -rf "$temp_dir"' RETURN
+
+    local stderr_file="$temp_dir/stderr.log"
+
+    (
+        cd "$repo_root"
+        env -i \
+            HOME="$temp_dir" \
+            PATH="/usr/bin:/bin" \
+            platform="linux" \
+            TMUX="" \
+            SUDO_USER="" \
+            bash -lc '
+                source files/.bashrc.d/80-theme-powewrline
+            '
+    ) >/dev/null 2>"$stderr_file" || fail "80-theme-powewrline should not fail when powerline-daemon is missing"
+
+    if [[ -s "$stderr_file" ]]; then
+        cat "$stderr_file" >&2
+        fail "80-theme-powewrline should not emit stderr when powerline-daemon is missing"
+    fi
+}
+
 test_00_dotfiles_replaces_existing_directory_with_symlink
 test_24_shfmt_uses_release_asset_url_from_api
 test_50_mise_repairs_root_owned_cache_directory
@@ -574,5 +600,6 @@ test_70_powerline_repairs_root_owned_uv_cache
 test_53_python_apps_is_executable
 test_53_python_apps_removes_malformed_uv_tools
 test_setup_bootstraps_pre_commit_from_uv
+test_powerline_theme_skips_cleanly_without_powerline_daemon
 
 echo "All setup regression tests passed"
