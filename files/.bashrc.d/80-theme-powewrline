@@ -7,7 +7,10 @@ load_powerline() {
     if ! [[ $(who am i) =~ \([0-9a-z.\-]+\)$ || "$platform" == "mac" || "$platform" == "linux" || "$TMUX" != "" || "$SUDO_USER" != "" ]]; then
         return
     fi
-    powerline_env=$(dirname "$(realpath "$(which powerline-daemon)")")
+    if ! command -v powerline-daemon >/dev/null 2>&1; then
+        return
+    fi
+    powerline_env=$(dirname "$(realpath "$(command -v powerline-daemon)")")
     python="$powerline_env/python"
     PATH="$PATH:$($python -c "import sysconfig; print(sysconfig.get_path('scripts'))")"
     mapfile -t sites < <($python -c 'import site; print(" ".join(site.getsitepackages()))')
