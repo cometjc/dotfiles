@@ -157,6 +157,7 @@ fi
 # Set colorful PS1 only on colorful terminals.
 #-------------------------------------------------------------
 eval "$(dircolors -b "$HOME/.config/gruvbox.dircolors")" || :
+export COLORTERM=truecolor
 
 #-------------------------------------------------------------
 # History
@@ -164,31 +165,6 @@ eval "$(dircolors -b "$HOME/.config/gruvbox.dircolors")" || :
 shopt -s cmdhist
 export TIMEFORMAT=$'\nreal %3R\tuser %3U\tsys %3S\tpcpu %P\n'
 export HOSTFILE=$HOME/.hosts # Put list of remote hosts in ~/.hosts ...
-
-#-------------------------------------------------------------
-# mintty-colors-solarized (for windows::mintty)
-#-------------------------------------------------------------
-if type -P mintty &>/dev/null; then
-    echo -ne '\e]10;#839496\a'   # Foreground   -> base0
-    echo -ne '\e]11;#002B36\a'   # Background   -> base03
-    echo -ne '\e]12;#93A1A1\a'   # Cursor       -> base1
-    echo -ne '\e]4;0;#073642\a'  # black        -> Base02
-    echo -ne '\e]4;8;#002B36\a'  # bold black   -> Base03
-    echo -ne '\e]4;1;#DC322F\a'  # red          -> red
-    echo -ne '\e]4;9;#CB4B16\a'  # bold red     -> orange
-    echo -ne '\e]4;2;#859900\a'  # green        -> green
-    echo -ne '\e]4;10;#586E75\a' # bold green   -> base01 *
-    echo -ne '\e]4;3;#B58900\a'  # yellow       -> yellow
-    echo -ne '\e]4;11;#657B83\a' # bold yellow  -> base00 *
-    echo -ne '\e]4;4;#268BD2\a'  # blue         -> blue
-    echo -ne '\e]4;12;#839496\a' # bold blue    -> base0 *
-    echo -ne '\e]4;5;#D33682\a'  # magenta      -> magenta
-    echo -ne '\e]4;13;#6C71C4\a' # bold magenta -> violet
-    echo -ne '\e]4;6;#2AA198\a'  # cyan         -> cyan
-    echo -ne '\e]4;14;#93A1A1\a' # bold cyan    -> base1 *
-    echo -ne '\e]4;7;#EEE8D5\a'  # white        -> Base2
-    echo -ne '\e]4;15;#FDFDE3\a' # bold white   -> Base3
-fi
 
 #-------------------------------------------------------------
 # tmux
@@ -288,7 +264,7 @@ include_scripts() {
     find "$HOME"/.bashrc.d/ -name '*~' -delete
     # /etc/bashrc need to run after bashrc.d
     local bashrc_list
-    mapfile -t bashrc_list < <(find ~/.bashrc.d/ -name '[^.]*' -type f -print0 | xargs -0 ls -1 | sort)
+    mapfile -t bashrc_list < <(find ~/.bashrc.d/ -name '[^.]*' -type f -print0 | xargs -r -0 ls -1 | sort)
     # disable errexit
     local reset
     reset=$(shopt -p -o errexit)
@@ -315,7 +291,7 @@ include_scripts
 # Task Master aliases added on 2025/7/24
 alias tm='task-master'
 alias taskmaster='task-master'
-source /data/repo/sre/bashrc
+source /home/jethro/repo/sre/bashrc
 eval "$(direnv hook bash)"
 
 # Added by `rbenv init` on 西元2025年08月20日 (週三) 10時26分09秒 CST
@@ -330,3 +306,12 @@ if [[ "$CURSOR_AGENT" = 1 ]]; then
 fi
 
 complete -C ~/.local/bin/mc mc
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+if [[ -f "$HOME/.local/bin/env" ]]; then
+    # shellcheck source=/dev/null
+    . "$HOME/.local/bin/env"
+fi

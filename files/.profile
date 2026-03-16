@@ -24,3 +24,7 @@ fi
 export XMODIFIERS=@im=fcitx
 export GTK_IM_MODULE=fcitx
 export QT_IM_MODULE=fcitx
+
+if [ -e /home/jethro/.nix-profile/etc/profile.d/nix.sh ]; then . /home/jethro/.nix-profile/etc/profile.d/nix.sh; fi # added by Nix installer
+
+. "$HOME/.local/bin/env"

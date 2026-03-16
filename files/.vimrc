@@ -115,7 +115,7 @@ autocmd FileType qf wincmd J
 Plug 'vim-ruby/vim-ruby'
 Plug 'ngmy/vim-rubocop'
 "========================== Tools - Git
-"Plug 'airblade/vim-gitgutter'
+Plug 'airblade/vim-gitgutter'
 let g:gitgutter_escape_grep = 1
 let g:gitgutter_max_signs = 5000
 Plug 'tpope/vim-fugitive'
@@ -129,12 +129,12 @@ Plug 'ntpeters/vim-better-whitespace'
 Plug 'nathanaelkane/vim-indent-guides'
 let g:indent_guides_enable_on_vim_startup = 1
 let g:indent_guides_auto_colors = 0
-let g:indent_guides_start_level=2
-let g:indent_guides_guide_size=1
+let g:indent_guides_start_level = 2
+let g:indent_guides_guide_size = 1
 Plug 'mg979/vim-visual-multi', {'branch': 'master'}
 let g:VM_maps = {}
-let g:VM_maps["Add Cursor Down"]             = ''
-let g:VM_maps["Add Cursor Up"]               = ''
+let g:VM_maps["Add Cursor Down"] = ''
+let g:VM_maps["Add Cursor Up"] = ''
 
 Plug 'junegunn/vim-easy-align'
 " Start interactive EasyAlign in visual mode (e.g. vipga)
@@ -188,8 +188,9 @@ let g:copilot_node_command = "~/.local/share/mise/installs/node/latest/bin/node"
 Plug 'morhetz/gruvbox'
 Plug 'vim-airline/vim-airline'
 Plug 'vim-airline/vim-airline-themes'
+"Plug 'edkolev/tmuxline.vim'
 let g:airline_powerline_fonts = 1
-let g:airline_theme='base16_gruvbox_dark_hard'
+let g:airline_theme='base16_gruvbox_dark_medium'
 " spaces are allowed after tabs, but not in between
 " this algorithm works well with programming styles that use tabs for
 " indentation and spaces for alignment
@@ -203,10 +204,6 @@ augroup open-tabs
 	au!
 	au VimEnter * ++nested if !&diff | tab all | tabfirst | endif
 augroup end
-map <C-left>    <Plug>AirlineSelectPrevTab " previous buffer
-map <C-right>   <Plug>AirlineSelectNextTab " next buffer
-map <C-S-Left>  :tabmove -1<CR>            " move tab to left
-map <C-S-Right> :tabmove +1<CR>            " move tab to right
 let g:airline#extensions#ale#enabled = 1
 let g:airline#extensions#tabline#left_sep = ''
 let g:airline#extensions#tabline#right_sep = ''
@@ -573,14 +570,24 @@ function! ToggleColumn()
 	endif
 endfunction
 
-map  <M-Up>      :call <SID>LocationPrevious()<CR>
-map  <S-Up>      :call Pre_err()<CR>
+nnoremap <silent> <M-Up>      :call <SID>LocationPrevious()<CR>
+nnoremap <silent> <S-Up>      :call Pre_err()<CR>
 map  <C-Up>      <Plug>(GitGutterPrevHunk)
 map! <C-Up>      <Plug>(GitGutterPrevHunk)
-map  <M-Down>    :call <SID>LocationNext()<CR>|
-map  <S-Down>    :call Next_err()<CR>
+nnoremap <silent> <M-Down>    :call <SID>LocationNext()<CR>
+nnoremap <silent> <S-Down>    :call Next_err()<CR>
 map  <C-Down>    <Plug>(GitGutterNextHunk)
 map! <C-Down>    <Plug>(GitGutterNextHunk)
+map <M-S-left>    <Plug>AirlineSelectPrevTab " previous buffer
+map <M-S-right>   <Plug>AirlineSelectNextTab " next buffer
+map <C-S-Left>  :tabmove -1<CR>            " move tab to left
+map <C-S-Right> :tabmove +1<CR>            " move tab to right
+
+" Fallbacks for terminals/tmux that emit raw Shift+Arrow escapes.
+nnoremap <silent> <Esc>[1;2A :call Pre_err()<CR>
+nnoremap <silent> <Esc>[1;2B :call Next_err()<CR>
+nnoremap <silent> <Esc>O2A   :call Pre_err()<CR>
+nnoremap <silent> <Esc>O2B   :call Next_err()<CR>
 map  <C-B>       :call Do_make__()<CR>|                  " excute make in vim and open quickfix window
 map  <C-F4>      :bd<CR>
 map  <C-F7>      :silent gr '<c-r>=expand('<cword>')<CR>' .\|redraw!<CR>

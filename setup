@@ -29,6 +29,16 @@ run-parts --exit-on-error --regex='[0-9][0-9]-*' $arg .
 git config branch.master.rebase true
 
 # Install pre-commit hooks
+export PATH="$HOME/.local/bin:$PATH"
+if ! command -v pre-commit >/dev/null 2>&1; then
+    if command -v uv >/dev/null 2>&1; then
+        uv tool install --reinstall pre-commit
+    else
+        echo "pre-commit not found and uv is unavailable" 1>&2
+        exit 1
+    fi
+fi
+ensure_user_owned_dir "$HOME/.cache/pre-commit"
 pre-commit install
 
 # Daily Update dotfiles repo

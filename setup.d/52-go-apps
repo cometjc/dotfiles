@@ -9,6 +9,7 @@ else
     exit 1
 fi
 
+ensure_user_owned_dir "$HOME/.cache/mise"
 eval "$("$HOME/.local/bin/mise" activate bash)"
 mise use --global go@latest
 eval "$("$HOME/.local/bin/mise" activate bash)"

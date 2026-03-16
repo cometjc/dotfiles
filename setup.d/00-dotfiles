@@ -21,11 +21,22 @@ if [[ -d ~/.config && ! -L ~/.config ]]; then
     rm -rvf ~/.config
 fi
 
+merge_existing_directory_into_repo() {
+    local target="$1"
+    local src="$2"
+    if [[ -d "$target" && ! -L "$target" && -d "$src" ]]; then
+        change "Merge $target with $src"
+        rsync --ignore-existing -av "$target"/ "$src"/
+        rm -rvf "$target"
+    fi
+}
+
 while read -r src; do
     target="$HOME/$(basename "$src")"
+    merge_existing_directory_into_repo "$target" "$src"
     if [[ "$(realpath "$target")" -ef "$src" ]]; then
         pass "$target -> $src"
     else
-        change "$(ln -sfv "$src" ~/ 2>&1)"
+        change "$(ln -sfnv "$src" "$target" 2>&1)"
     fi
 done < <(find "$(realpath -L ../files/)" -maxdepth 1 -mindepth 1)

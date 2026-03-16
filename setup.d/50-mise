@@ -13,6 +13,7 @@ if ! command -v mise >&/dev/null; then
     curl https://mise.run | sh
 fi
 
+ensure_user_owned_dir "$HOME/.cache/mise"
 eval "$("$HOME/.local/bin/mise" activate bash)"
 mise settings set experimental true
 mise upgrade

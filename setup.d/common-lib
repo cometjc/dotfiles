@@ -194,6 +194,20 @@ cleanup() {
     fi
 }
 
+ensure_user_owned_dir() {
+    local dir="$1"
+    if [[ -e "$dir" ]] && [[ ! -O "$dir" ]]; then
+        change "Fix ownership of $dir"
+        sudo chown -R "$USER":"$(id -gn)" "$dir"
+    fi
+    mkdir -p "$dir"
+}
+
+ensure_mise_cache_writable() {
+    local cache_dir="${1:-$HOME/.cache/mise}"
+    ensure_user_owned_dir "$cache_dir"
+}
+
 # shellcheck disable=SC2154
 trap 'status=$?; cleanup; exit $status' EXIT
 setup_script_output_prefix
