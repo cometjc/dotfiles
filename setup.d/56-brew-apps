@@ -8,11 +8,17 @@ else
     echo "Cannot find common-lib."
     exit 1
 fi
+brew_bin="${BREW_BIN:-/home/linuxbrew/.linuxbrew/bin/brew}"
 command -v brew >/dev/null 2>&1 || NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+eval "$("$brew_bin" shellenv)"
 
-brew install \
-    gcc \
-    derailed/k9s/k9s \
-    fx \
+packages=(
+    gcc
+    derailed/k9s/k9s
+    fx
     kubectx
+)
+
+for pkg in "${packages[@]}"; do
+    brew install "$pkg"
+done

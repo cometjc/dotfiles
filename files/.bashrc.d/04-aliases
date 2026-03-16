@@ -41,6 +41,10 @@ sshfs() {
         -o reconnect
 }
 
+ssh-copy-id() {
+    command ssh-copy-id -i "${SSH_ED25519_PUB:-$HOME/.ssh/id_ed25519.pub}" "$@"
+}
+
 alias mv='mv -i'
 alias mkdir='mkdir -p'
 alias grep='grep --color=auto --binary-files=without-match'
@@ -120,6 +124,15 @@ fixup() {
         git commit --amend --no-edit
     fi
 }
+
+git_amend_to() {
+    local sha subj
+    sha="$(git rev-parse "$1")" || return 1
+    subj="$(git show -s --format=%s "$sha")" || return 1
+    git -c core.hooksPath=/dev/null commit -m "fixup! $subj" || return 1
+    GIT_SEQUENCE_EDITOR=: git -c core.hooksPath=/dev/null -c sequence.editor=: rebase --autostash -i --autosquash "$sha^"
+}
+
 alias co='git checkout --recurse-submodules'
 complete -F _complete_alias co
 
@@ -230,6 +243,43 @@ get_repo_relative_path() {
     # 若上述邏輯未涵蓋，則回傳原始輸入內容
     echo "$input"
 }
+
+gitproj() {
+    local remote url host path web
+
+    remote="${1:-origin}"
+    url="$(git remote get-url "$remote" 2>/dev/null || git remote get-url origin 2>/dev/null || git remote get-url upstream 2>/dev/null)" || {
+        echo "Not in a git repo (or no remote found)." >&2
+            return 1
+        }
+
+    # Parse SSH form: git@host:group/repo.git
+    if [[ "$url" =~ ^git@([^:]+):(.+)$ ]]; then
+        host="${BASH_REMATCH[1]}"
+        path="${BASH_REMATCH[2]}"
+        # Parse SSH URL form: ssh://git@host/group/repo.git
+    elif [[ "$url" =~ ^ssh://git@([^/]+)/(.+)$ ]]; then
+        host="${BASH_REMATCH[1]}"
+        path="${BASH_REMATCH[2]}"
+        # Parse HTTPS form: https://host/group/repo(.git)
+    elif [[ "$url" =~ ^https?://([^/]+)/(.+)$ ]]; then
+        host="${BASH_REMATCH[1]}"
+        path="${BASH_REMATCH[2]}"
+    else
+        echo "Unsupported remote URL format: $url" >&2
+        return 1
+    fi
+
+    case "$host" in
+        gitlab.teamt5.net|gitlab.com|github.com) ;;
+        *) echo "Host not supported: $host" >&2; return 1 ;;
+    esac
+
+    path="${path%.git}"
+    web="https://$host/$path"
+    echo "Project URL: $web"
+}
+
 
 # gitignore 函式，將指定路徑逐一轉換為相對於 repo_root 的路徑，並加入到 .git/info/exclude
 gitignore() {

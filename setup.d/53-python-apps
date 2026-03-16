@@ -2,11 +2,11 @@
 # vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
 common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
 if [[ -f "$common_lib" ]]; then
-	# shellcheck source=common-lib
-	. "$common_lib"
+    # shellcheck source=common-lib
+    . "$common_lib"
 else
-	echo "Cannot find common-lib."
-	exit 1
+    echo "Cannot find common-lib."
+    exit 1
 fi
 
 # pipx
@@ -14,32 +14,66 @@ fi
 
 # UV
 if ! command -v uv &>/dev/null; then
-	curl -LsSf https://astral.sh/uv/install.sh | sh
-	# Ensure ~/.local/bin is in PATH after installation
-	export PATH="$HOME/.local/bin:$PATH"
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    # Ensure ~/.local/bin is in PATH after installation
+    export PATH="$HOME/.local/bin:$PATH"
 else
-	uv self update
+    ensure_user_owned_dir "$HOME/.cache/uv"
+    uv self update
 fi
+ensure_user_owned_dir "$HOME/.cache/uv"
 uv python install 3.12 3.13
 
 tools=(
-	'git+https://github.com/jcppkkk/update-kube-config.git'
-	ansible
-	flameshow
-	git-up
-	percol
-	pipenv
-	poetry
-	pre-commit
-	ruff
+    'git+https://github.com/jcppkkk/update-kube-config.git'
+    ansible
+    flameshow
+    git-up
+    percol
+    pipenv
+    poetry
+    pre-commit
+    ruff
 )
 
+tool_name_for_uv_spec() {
+    case "$1" in
+        'git+https://github.com/jcppkkk/update-kube-config.git')
+            echo kubeconfig-updater
+            ;;
+        *)
+            echo "$1"
+            ;;
+    esac
+}
+
+cleanup_malformed_uv_tools() {
+    local tool_list_output="$1"
+    local malformed_tool
+    # shellcheck disable=SC2016
+    while IFS= read -r malformed_tool; do
+        [[ -z "$malformed_tool" ]] && continue
+        change "Removing malformed uv tool: $malformed_tool"
+        uv tool uninstall "$malformed_tool" || true
+    done < <(printf '%s\n' "$tool_list_output" | sed -n 's/^warning: Ignoring malformed tool `\([^`]*\)`.*/\1/p')
+}
+
+tool_list_output="$(uv tool list 2>&1 || true)"
+cleanup_malformed_uv_tools "$tool_list_output"
+tool_list_output="$(uv tool list 2>&1 || true)"
+
+# shellcheck disable=SC2016
 # shellcheck disable=SC2034
-mapfile -t current_tools < <(uv tool list | grep -v "^-" | cut -d" " -f1)
+mapfile -t reinstall_tools < <(printf '%s\n' "$tool_list_output" | sed -n 's/^warning: Tool `\([^`]*\)` environment not found.*/\1/p')
+# shellcheck disable=SC2034
+mapfile -t current_tools < <(printf '%s\n' "$tool_list_output" | grep -v "^-" | grep -v "^warning:" | cut -d" " -f1)
 
 for tool in "${tools[@]}"; do
-	if ! array_contains current_tools "$tool"; then
-		uv tool install "$tool"
-	fi
+    tool_name="$(tool_name_for_uv_spec "$tool")"
+    if array_contains reinstall_tools "$tool_name"; then
+        uv tool install --reinstall "$tool"
+    elif ! array_contains current_tools "$tool" && ! array_contains current_tools "$tool_name"; then
+        uv tool install "$tool"
+    fi
 done
 uv tool upgrade --all

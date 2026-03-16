@@ -26,15 +26,35 @@ case $platform in
             armhf) SHFMT_ARCH="arm" ;;
             *)
                 fail "Unsupported architecture: $ARCH"
-                return 1
+                exit 1
                 ;;
         esac
 
         # Get latest version from GitHub API
-        SHFMT_VERSION=$(curl -fsSL https://api.github.com/repos/mvdan/sh/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        RELEASE_JSON=$(curl -fsSL https://api.github.com/repos/mvdan/sh/releases/latest)
+        SHFMT_VERSION=$(printf '%s' "$RELEASE_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])')
         if [[ -z "$SHFMT_VERSION" ]]; then
             fail "Failed to get shfmt version"
-            return 1
+            exit 1
+        fi
+
+        ASSET_NAME="shfmt_${SHFMT_VERSION}_linux_${SHFMT_ARCH}"
+        DOWNLOAD_URL=$(
+            printf '%s' "$RELEASE_JSON" | python3 -c '
+import json
+import sys
+
+asset_name = sys.argv[1]
+assets = json.load(sys.stdin).get("assets", [])
+for asset in assets:
+    if asset.get("name") == asset_name:
+        print(asset.get("browser_download_url", ""))
+        break
+' "$ASSET_NAME"
+        )
+        if [[ -z "$DOWNLOAD_URL" ]]; then
+            fail "Failed to find shfmt asset: $ASSET_NAME"
+            exit 1
         fi
 
         # Check current version if installed
@@ -51,7 +71,6 @@ case $platform in
         fi
 
         # Download and install
-        DOWNLOAD_URL="https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION#v}_linux_${SHFMT_ARCH}"
         TMP_FILE=$(mktemp)
         if curl -fsSL "$DOWNLOAD_URL" -o "$TMP_FILE"; then
             chmod +x "$TMP_FILE"
@@ -60,12 +79,12 @@ case $platform in
                 pass "shfmt installed/updated successfully ($SHFMT_VERSION)"
             else
                 fail "shfmt installation verification failed"
-                return 1
+                exit 1
             fi
         else
             fail "Failed to download shfmt"
             rm -f "$TMP_FILE"
-            return 1
+            exit 1
         fi
         ;;
     *)

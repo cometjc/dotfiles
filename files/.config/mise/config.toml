@@ -1,7 +1,11 @@
 [settings]
 experimental = true
 
+[settings.python]
+uv_venv_auto = true
+
 [tools]
+age = "latest"
 go = "1.23"
 node = ["latest", "20"]
-"npm:@openai/codex" = "latest"
+sops = "latest"

@@ -16,6 +16,8 @@ if ! command -v mise &>/dev/null; then
     exit 0
 fi
 
+ensure_user_owned_dir "$HOME/.cache/mise"
+ensure_user_owned_dir "$HOME/.npm"
 eval "$(mise activate bash)" || {
     fail "Failed to activate mise"
     exit 0
