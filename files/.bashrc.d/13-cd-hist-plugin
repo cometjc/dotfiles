@@ -209,11 +209,14 @@ cd_widget() {
 	# Use cd instead of builtin cd to trigger chpwd_functions hook
 	# This will automatically call append_cdhist and other hooks like _mise_hook
 	cd "$cd_target"
+	return 0
 }
 
-# if this is interactive shell, then bind cd_widget using two-layer binding
-# 1. Bind the actual command using -x
-# 2. Bind the key we actually call, which invokes the -x binding and adds newline to update prompt
+# if this is interactive shell, keep Alt+s as a two-step binding:
+# 1. run cd_widget through a bind -x target
+# 2. immediately accept a newline so readline redraws the prompt in the new dir
+# Direct Alt+s -> bind -x skipped that redraw, so the prompt stayed stale until
+# the next command even though PWD had already changed.
 if [[ $- =~ .*i.* ]]; then
 	bind -x '"\C-x\C-s": "cd_widget"'
 	bind '"\es": "\C-x\C-s\n"'
