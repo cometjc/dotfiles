@@ -185,12 +185,12 @@ let g:copilot_filetypes = {
 let g:copilot_node_command = "~/.local/share/mise/installs/node/latest/bin/node"
 
 "========================== Themes
-Plug 'morhetz/gruvbox'
+Plug 'sainnhe/everforest'
 Plug 'vim-airline/vim-airline'
 Plug 'vim-airline/vim-airline-themes'
 "Plug 'edkolev/tmuxline.vim'
 let g:airline_powerline_fonts = 1
-let g:airline_theme='base16_gruvbox_dark_medium'
+let g:airline_theme='everforest'
 " spaces are allowed after tabs, but not in between
 " this algorithm works well with programming styles that use tabs for
 " indentation and spaces for alignment
@@ -214,9 +214,13 @@ set wildmode=longest,list
 set wildmenu
 syntax enable
 set background=dark
+if has('termguicolors')
+	set termguicolors
+endif
+let g:everforest_background = 'medium'
 
 " error occors on first install
-silent! colorscheme gruvbox " ignore error on first initialize
+silent! colorscheme everforest " ignore error on first initialize
 
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
