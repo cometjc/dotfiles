@@ -1,0 +1,366 @@
+#!/bin/bash
+set -euo pipefail
+
+PROGRAM_NAME="${0##*/}"
+DISPATCHER_MARKER="shared-envrc-dispatcher"
+RUNNER_MARKER="shared-envrc-hook-runner"
+STATE_SUBDIR="user-global-envrc"
+SHARED_ENVRC_PATH="${SHARED_ENVRC_SHARED_FILE:-$HOME/shared_codes/.envrc}"
+
+usage() {
+    cat <<'EOF'
+Usage: shared-envrc-sync <command> [args]
+
+Commands:
+  sync-on-enter
+  ensure-hooks
+  mark-dirty <hook-name>
+  install-templates
+EOF
+}
+
+die() {
+    echo "$PROGRAM_NAME: $*" >&2
+    exit 1
+}
+
+log_status() {
+    echo "$PROGRAM_NAME: $*" >&2
+}
+
+repo_root() {
+    git rev-parse --show-toplevel 2>/dev/null
+}
+
+git_dir() {
+    git rev-parse --git-dir 2>/dev/null
+}
+
+repo_envrc_path() {
+    printf '%s/.envrc\n' "$(repo_root)"
+}
+
+state_dir() {
+    printf '%s/%s\n' "$(git_dir)" "$STATE_SUBDIR"
+}
+
+state_file() {
+    printf '%s/state\n' "$(state_dir)"
+}
+
+base_file() {
+    printf '%s/base.envrc\n' "$(state_dir)"
+}
+
+conflict_dir() {
+    printf '%s/conflict\n' "$(state_dir)"
+}
+
+ensure_state_dir() {
+    mkdir -p "$(state_dir)"
+}
+
+skip_permanently=0
+dirty=0
+managed=0
+
+load_state() {
+    skip_permanently=0
+    dirty=0
+    managed=0
+    if [[ -f "$(state_file)" ]]; then
+        # shellcheck disable=SC1090
+        source "$(state_file)"
+    fi
+}
+
+write_state() {
+    ensure_state_dir
+    cat >"$(state_file)" <<EOF
+skip_permanently=${skip_permanently:-0}
+dirty=${dirty:-0}
+managed=${managed:-0}
+EOF
+}
+
+same_file() {
+    local left="$1"
+    local right="$2"
+    cmp -s "$left" "$right"
+}
+
+write_dispatcher() {
+    local target="$1"
+    local hook_name="$2"
+    cat >"$target" <<EOF
+#!/bin/sh
+# $DISPATCHER_MARKER
+set -eu
+hook_dir="\$(dirname "\$0")/$hook_name.d"
+if [ ! -d "\$hook_dir" ]; then
+    exit 0
+fi
+for hook in "\$hook_dir"/*; do
+    [ -e "\$hook" ] || continue
+    [ -x "\$hook" ] || continue
+    "\$hook" "\$@"
+done
+EOF
+    chmod +x "$target"
+}
+
+write_runner() {
+    local target="$1"
+    local hook_name="$2"
+    cat >"$target" <<EOF
+#!/bin/sh
+# $RUNNER_MARKER
+set -eu
+sync_script="\${SHARED_ENVRC_SYNC_SCRIPT:-\$HOME/shared_codes/$PROGRAM_NAME}"
+if [ -x "\$sync_script" ]; then
+    "\$sync_script" mark-dirty "$hook_name"
+fi
+EOF
+    chmod +x "$target"
+}
+
+install_hook_dispatcher() {
+    local hooks_dir="$1"
+    local hook_name="$2"
+    local hook_path="$hooks_dir/$hook_name"
+    local hook_parts_dir="$hooks_dir/$hook_name.d"
+    local legacy_hook="$hook_parts_dir/10-legacy"
+    local runner_hook="$hook_parts_dir/50-shared-envrc"
+    local preserved_hook
+
+    mkdir -p "$hook_parts_dir"
+
+    if [[ -f "$hook_path" ]] && ! grep -Fq "$DISPATCHER_MARKER" "$hook_path"; then
+        if [[ ! -e "$legacy_hook" ]]; then
+            mv "$hook_path" "$legacy_hook"
+            chmod +x "$legacy_hook"
+        else
+            preserved_hook="$(mktemp "$hook_parts_dir/20-preserved.XXXXXX")"
+            mv "$hook_path" "$preserved_hook"
+            chmod +x "$preserved_hook"
+        fi
+    fi
+
+    write_dispatcher "$hook_path" "$hook_name"
+    write_runner "$runner_hook" "$hook_name"
+}
+
+install_templates() {
+    local template_hooks_dir="$HOME/.git-templates/hooks"
+    mkdir -p "$template_hooks_dir"
+    install_hook_dispatcher "$template_hooks_dir" post-checkout
+    install_hook_dispatcher "$template_hooks_dir" post-merge
+    install_hook_dispatcher "$template_hooks_dir" post-rewrite
+}
+
+ensure_hooks() {
+    local root hooks_dir
+    root="$(repo_root)" || return 0
+    [[ -f "$root/.envrc" ]] || return 0
+    hooks_dir="$(git_dir)/hooks"
+    install_hook_dispatcher "$hooks_dir" post-checkout
+    install_hook_dispatcher "$hooks_dir" post-merge
+    install_hook_dispatcher "$hooks_dir" post-rewrite
+}
+
+mark_dirty() {
+    local hook_name="${1:-}"
+    [[ -n "$hook_name" ]] || die "mark-dirty requires a hook name"
+    local root
+    root="$(repo_root)" || return 0
+    [[ -f "$root/.envrc" ]] || return 0
+    ensure_state_dir
+    load_state
+    dirty=1
+    managed=1
+    write_state
+}
+
+print_conflict_diff() {
+    local base="$1"
+    local local_file="$2"
+    local shared="$3"
+    echo "shared-envrc-sync: local and shared .envrc both changed since base; review diffs below." >&2
+    git --no-pager diff --no-index -- "$base" "$local_file" || true
+    git --no-pager diff --no-index -- "$base" "$shared" || true
+}
+
+prompt_conflict_choice() {
+    local choice="${SHARED_ENVRC_CHOICE:-}"
+    if [[ -n "$choice" ]]; then
+        printf '%s\n' "$choice"
+        return
+    fi
+    if [[ ! -t 0 ]]; then
+        printf '%s\n' "skip-and-remember"
+        return
+    fi
+    cat >&2 <<'EOF'
+Choose how to resolve the shared .envrc conflict:
+  overwrite-local         replace the repo .envrc with the shared version
+  promote-local-to-shared replace ~/shared_codes/.envrc with the repo version
+  vimdiff-merge           open vimdiff and manually merge
+  skip-and-remember       skip this repo permanently
+EOF
+    read -r -p "> " choice
+    printf '%s\n' "$choice"
+}
+
+resolve_conflict() {
+    local local_file="$1"
+    local base="$2"
+    local shared="$3"
+    local merged="$4"
+    local choice
+
+    print_conflict_diff "$base" "$local_file" "$shared"
+    choice="$(prompt_conflict_choice)"
+    case "$choice" in
+        overwrite-local)
+            cp "$shared" "$local_file"
+            cp "$shared" "$(base_file)"
+            ;;
+        promote-local-to-shared)
+            cp "$local_file" "$shared"
+            cp "$local_file" "$(base_file)"
+            ;;
+        vimdiff-merge)
+            cp "$merged" "$local_file"
+            if command -v vimdiff >/dev/null 2>&1; then
+                vimdiff "$local_file" "$base" "$shared"
+            else
+                die "vimdiff is not installed"
+            fi
+            if grep -q '^<<<<<<< ' "$local_file"; then
+                die "vimdiff merge left conflict markers in $local_file"
+            fi
+            cp "$local_file" "$(base_file)"
+            ;;
+        skip-and-remember)
+            load_state
+            skip_permanently=1
+            managed=1
+            write_state
+            ;;
+        *)
+            die "unknown conflict choice: $choice"
+            ;;
+    esac
+}
+
+sync_on_enter() {
+    local root local_file base shared merged merge_status=0 was_managed=0
+    root="$(repo_root)" || return 0
+    local_file="$root/.envrc"
+    [[ -f "$local_file" ]] || return 0
+    [[ -f "$SHARED_ENVRC_PATH" ]] || return 0
+
+    ensure_state_dir
+    load_state
+    was_managed=$managed
+    ((skip_permanently == 0)) || return 0
+
+    ensure_hooks
+
+    if [[ ! -f "$(base_file)" ]]; then
+        cp "$SHARED_ENVRC_PATH" "$(base_file)"
+    fi
+
+    base="$(base_file)"
+    shared="$SHARED_ENVRC_PATH"
+
+    if same_file "$local_file" "$base"; then
+        if ! same_file "$shared" "$base"; then
+            cp "$shared" "$local_file"
+            cp "$shared" "$base"
+        fi
+        load_state
+        dirty=0
+        managed=1
+        write_state
+        if ((was_managed == 0)); then
+            log_status "now managing this repo"
+        fi
+        return 0
+    fi
+
+    if same_file "$shared" "$base"; then
+        load_state
+        dirty=0
+        managed=1
+        write_state
+        if ((was_managed == 0)); then
+            log_status "now managing this repo"
+        fi
+        return 0
+    fi
+
+    merged="$(mktemp)"
+    if git merge-file -p "$local_file" "$base" "$shared" >"$merged"; then
+        cp "$merged" "$local_file"
+        cp "$shared" "$base"
+        rm -f "$merged"
+        load_state
+        dirty=0
+        managed=1
+        write_state
+        if ((was_managed == 0)); then
+            log_status "now managing this repo"
+        fi
+        return 0
+    else
+        merge_status=$?
+    fi
+
+    mkdir -p "$(conflict_dir)"
+    cp "$local_file" "$(conflict_dir)/local.envrc"
+    cp "$base" "$(conflict_dir)/base.envrc"
+    cp "$shared" "$(conflict_dir)/shared.envrc"
+    cp "$merged" "$(conflict_dir)/merged.envrc"
+    if [[ $merge_status -eq 1 ]]; then
+        resolve_conflict "$local_file" "$base" "$shared" "$merged"
+        rm -f "$merged"
+        load_state
+        dirty=0
+        managed=1
+        write_state
+        if ((was_managed == 0)); then
+            log_status "now managing this repo"
+        fi
+        return 0
+    fi
+
+    rm -f "$merged"
+    return "$merge_status"
+}
+
+command_name="${1:-}"
+case "$command_name" in
+    sync-on-enter)
+        shift
+        sync_on_enter "$@"
+        ;;
+    ensure-hooks)
+        shift
+        ensure_hooks "$@"
+        ;;
+    mark-dirty)
+        shift
+        mark_dirty "$@"
+        ;;
+    install-templates)
+        shift
+        install_templates "$@"
+        ;;
+    "" | -h | --help)
+        usage
+        ;;
+    *)
+        die "unknown command: $command_name"
+        ;;
+esac

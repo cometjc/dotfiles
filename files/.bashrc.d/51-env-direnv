@@ -1,2 +1,15 @@
 #!/bin/bash
+_shared_envrc_sync_on_chpwd() {
+    local sync_script="${SHARED_ENVRC_SYNC_SCRIPT:-$HOME/shared_codes/shared-envrc-sync}"
+    if [[ -x "$sync_script" ]]; then
+        "$sync_script" sync-on-enter || true
+    fi
+}
+
+if declare -p chpwd_functions >/dev/null 2>&1 && ! array_contains chpwd_functions _shared_envrc_sync_on_chpwd; then
+    chpwd_functions+=(_shared_envrc_sync_on_chpwd)
+fi
+
 eval "$(direnv hook bash)"
+
+_shared_envrc_sync_on_chpwd
