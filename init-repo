@@ -41,3 +41,8 @@ fi
 if ! grep "^files/.gitconfig" .gitattributes &>/dev/null; then
     echo "files/.gitconfig filter=sanitize-gitconfig" >>.gitattributes
 fi
+
+shared_envrc_sync_script="${SHARED_ENVRC_SYNC_SCRIPT:-$HOME/shared_codes/shared-envrc-sync}"
+if [[ -x "$shared_envrc_sync_script" ]]; then
+    "$shared_envrc_sync_script" install-templates
+fi
