@@ -2,7 +2,7 @@
 _shared_envrc_sync_on_chpwd() {
     local sync_script="${SHARED_ENVRC_SYNC_SCRIPT:-$HOME/shared_codes/shared-envrc-sync}"
     if [[ -x "$sync_script" ]]; then
-        "$sync_script" sync-on-enter || true
+        SHARED_ENVRC_SYNC_QUIET_NOOP=1 "$sync_script" sync-on-enter >/dev/null 2>&1 || true
     fi
 }
 

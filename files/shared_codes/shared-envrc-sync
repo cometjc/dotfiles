@@ -28,6 +28,12 @@ log_status() {
     echo "$PROGRAM_NAME: $*" >&2
 }
 
+log_noop_status() {
+    if [[ "${SHARED_ENVRC_SYNC_QUIET_NOOP:-0}" != "1" ]]; then
+        log_status "$@"
+    fi
+}
+
 repo_root() {
     git rev-parse --show-toplevel 2>/dev/null
 }
@@ -285,6 +291,8 @@ sync_on_enter() {
         write_state
         if ((was_managed == 0)); then
             log_status "now managing this repo"
+        elif same_file "$shared" "$base"; then
+            log_noop_status "already managed, no updates needed"
         fi
         return 0
     fi
@@ -296,6 +304,8 @@ sync_on_enter() {
         write_state
         if ((was_managed == 0)); then
             log_status "now managing this repo"
+        else
+            log_noop_status "already managed, no updates needed"
         fi
         return 0
     fi
