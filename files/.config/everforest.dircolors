@@ -107,7 +107,7 @@ TERM xterm-termite
 # 256 colour is available:
 #
 # - https://www.mail-archive.com/bug-coreutils@gnu.org/msg11030.html
-# - https://github.com/morhetz/gruvbox
+# - https://github.com/sainnhe/everforest
 #
 # Text color coding:
 # 38;5;COLOR_NUMBER
@@ -115,42 +115,42 @@ TERM xterm-termite
 # 48;5;COLOR_NUMBER
 # COLOR_NUMBER is from 0 to 255.
 
-NORMAL 00;38;5;250 # no color code at all
-FILE   00;38;5;223 # regular file: use no color at all
+NORMAL 00;38;5;245 # no color code at all
+FILE   00;38;5;187 # regular file
 RESET  0           # reset to terminal default color
-DIR    00;38;5;166 # directory
+DIR    00;38;5;144 # directory
 LINK   target      # symbolic link. (If you set this to 'target' instead of a
                    # numerical value, the color is as for the file pointed to.)
 
-MULTIHARDLINK         04        # regular file with more than one link
-FIFO                  40;33     # pipe
-SOCK                  38;5;211  # socket
-DOOR                  38;5;211  # door
-BLK                   40;33;01  # block device driver
-CHR                   40;33;01  # character device driver
-ORPHAN                40;31;01  # symlink to nonexistent file, or non-stat'able file
-SETUID                37;41     # file that is setuid (u+s)
-SETGID                30;43     # file that is setgid (g+s)
-CAPABILITY            30;41     # file with capability
-STICKY_OTHER_WRITABLE 01;36;44  # dir that is sticky and other-writable (+t,o+w)
-OTHER_WRITABLE        38;5;208;48;5;243 # dir that is other-writable (o+w) and not sticky
-STICKY                38;5;208;48;5;243 # dir with the sticky bit set (+t) and not other-writable
+MULTIHARDLINK         04                # regular file with more than one link
+FIFO                  40;33             # pipe
+SOCK                  38;5;175          # socket
+DOOR                  38;5;175          # door
+BLK                   40;33;01          # block device driver
+CHR                   40;33;01          # character device driver
+ORPHAN                40;31;01          # symlink to nonexistent file, or non-stat'able file
+SETUID                30;41             # file that is setuid (u+s)
+SETGID                30;43             # file that is setgid (g+s)
+CAPABILITY            30;41             # file with capability
+STICKY_OTHER_WRITABLE 01;36;44          # dir that is sticky and other-writable (+t,o+w)
+OTHER_WRITABLE        38;5;174;48;5;239 # dir that is other-writable (o+w) and not sticky
+STICKY                38;5;174;48;5;239 # dir with the sticky bit set (+t) and not other-writable
 
 # This is for files with execute permission:
 EXEC  01;30;32
 
 # Crufty and ignorable files
-.bak   38;5;246
-.cache 38;5;246
-.dist  38;5;246
-.lock  38;5;246
-.log   38;5;246
-.old   38;5;246
-.orig  38;5;246
-.temp  38;5;246
-.tmp   38;5;246
+.bak   38;5;245
+.cache 38;5;245
+.dist  38;5;245
+.lock  38;5;245
+.log   38;5;245
+.old   38;5;245
+.orig  38;5;245
+.temp  38;5;245
+.tmp   38;5;245
 
-# archives or compressed (bright red)
+# archives or compressed
 .7z   01;31
 .Z    01;31
 .ace  01;31

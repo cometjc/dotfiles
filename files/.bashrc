@@ -156,7 +156,7 @@ fi
 #-------------------------------------------------------------
 # Set colorful PS1 only on colorful terminals.
 #-------------------------------------------------------------
-eval "$(dircolors -b "$HOME/.config/gruvbox.dircolors")" || :
+eval "$(dircolors -b "$HOME/.config/everforest.dircolors")" || :
 export COLORTERM=truecolor
 
 #-------------------------------------------------------------
