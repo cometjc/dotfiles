@@ -11,11 +11,59 @@ fi
 
 # Ensure uv is in PATH
 export PATH="$HOME/.local/bin:$PATH"
+
+repair_powerline_uv_tool() {
+    local tool_dir="$HOME/.local/share/uv/tools/powerline-status"
+    local tool_bin="$tool_dir/bin"
+    local pyvenv_cfg="$tool_dir/pyvenv.cfg"
+    local python_home=""
+    local version_info=""
+    local version_mm=""
+    local python_target=""
+    local launcher=""
+
+    if [[ ! -d "$tool_bin" ]]; then
+        return
+    fi
+
+    if [[ -f "$pyvenv_cfg" ]]; then
+        python_home="$(sed -n 's/^home = //p' "$pyvenv_cfg" | head -n1)"
+        version_info="$(sed -n 's/^version_info = //p' "$pyvenv_cfg" | head -n1)"
+    fi
+
+    if [[ -n "$version_info" ]]; then
+        version_mm="$(cut -d. -f1,2 <<<"$version_info")"
+    fi
+
+    if [[ -n "$python_home" ]]; then
+        if [[ -n "$version_mm" && -x "$python_home/python$version_mm" ]]; then
+            python_target="$python_home/python$version_mm"
+        elif [[ -x "$python_home/python3" ]]; then
+            python_target="$python_home/python3"
+        fi
+    fi
+
+    if [[ -n "$python_target" && ! -e "$tool_bin/python" ]]; then
+        change "Repair $tool_bin/python"
+        ln -sfn "$python_target" "$tool_bin/python"
+    fi
+
+    mkdir -p "$HOME/.local/bin"
+    for launcher in powerline powerline-config powerline-daemon powerline-lint powerline-render; do
+        if [[ -f "$tool_bin/$launcher" && ! -e "$HOME/.local/bin/$launcher" ]]; then
+            change "Link ~/.local/bin/$launcher -> $tool_bin/$launcher"
+            ln -sfn "$tool_bin/$launcher" "$HOME/.local/bin/$launcher"
+        fi
+    done
+}
+
+repair_powerline_uv_tool
 if ! command -v uv &>/dev/null; then
     change "uv not found, skipping powerline installation"
 else
     ensure_user_owned_dir "$HOME/.cache/uv"
     uv tool install --with powerline-gitstatus powerline-status -p 3.8
+    repair_powerline_uv_tool
 fi
 
 # Setup  https://github.com/powerline/fonts

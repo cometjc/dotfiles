@@ -3,19 +3,53 @@
 # $HOME/.local/bin/powerline-shell -> $HOME/.local/share/uv/tools/powerline-shell/bin/powerline-shell
 
 load_powerline() {
+    local daemon_path=""
+    local powerline_env=""
+    local python=""
+    local pyvenv_cfg=""
+    local python_home=""
+    local version_info=""
+    local version_mm=""
+    local check_file=""
+    local site=""
+    local powerline=""
+
     # shellcheck disable=SC2154
     if ! [[ $(who am i) =~ \([0-9a-z.\-]+\)$ || "$platform" == "mac" || "$platform" == "linux" || "$TMUX" != "" || "$SUDO_USER" != "" ]]; then
         return
     fi
-    if ! command -v powerline-daemon >/dev/null 2>&1; then
+
+    daemon_path="$(command -v powerline-daemon 2>/dev/null || true)"
+    if [[ -z "$daemon_path" && -f "$HOME/.local/share/uv/tools/powerline-status/bin/powerline-daemon" ]]; then
+        daemon_path="$HOME/.local/share/uv/tools/powerline-status/bin/powerline-daemon"
+    fi
+    if [[ -z "$daemon_path" ]]; then
         return
     fi
-    powerline_env=$(dirname "$(realpath "$(command -v powerline-daemon)")")
+
+    powerline_env=$(dirname "$(realpath "$daemon_path")")
     python="$powerline_env/python"
+    if [[ ! -x "$python" ]]; then
+        pyvenv_cfg="$(dirname "$powerline_env")/pyvenv.cfg"
+        if [[ -f "$pyvenv_cfg" ]]; then
+            python_home="$(sed -n 's/^home = //p' "$pyvenv_cfg" | head -n1)"
+            version_info="$(sed -n 's/^version_info = //p' "$pyvenv_cfg" | head -n1)"
+            version_mm="$(cut -d. -f1,2 <<<"$version_info")"
+            if [[ -n "$version_mm" && -x "$python_home/python$version_mm" ]]; then
+                python="$python_home/python$version_mm"
+            elif [[ -x "$python_home/python3" ]]; then
+                python="$python_home/python3"
+            else
+                return
+            fi
+        else
+            return
+        fi
+    fi
+
     PATH="$PATH:$($python -c "import sysconfig; print(sysconfig.get_path('scripts'))")"
     mapfile -t sites < <($python -c 'import site; print(" ".join(site.getsitepackages()))')
     sites=(/usr/share "${sites[@]}")
-    local powerline=""
     for site in "${sites[@]}"; do
         check_file="$site/powerline/bindings/bash/powerline.sh"
         if [ -f "$check_file" ]; then

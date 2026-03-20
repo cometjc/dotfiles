@@ -464,6 +464,86 @@ EOF
         || fail "70-powerline should continue with uv tool install after repairing ~/.cache/uv"
 }
 
+test_70_powerline_repairs_missing_uv_tool_python_shim() {
+    local temp_dir
+    temp_dir="$(mktemp -d)"
+    trap 'rm -rf "$temp_dir"' RETURN
+
+    local fake_bin="$temp_dir/bin"
+    local temp_home="$temp_dir/home"
+    local log_file="$temp_dir/powerline.log"
+    local tool_dir="$temp_home/.local/share/uv/tools/powerline-status"
+    local python_home="$temp_home/.local/share/uv/python/cpython-3.8.20-linux-x86_64-gnu/bin"
+    mkdir -p "$fake_bin" "$temp_home/.cache/uv" "$temp_home/.local/bin" "$tool_dir/bin" "$python_home"
+
+    cat >"$tool_dir/bin/powerline-daemon" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$tool_dir/bin/powerline-daemon"
+    cat >"$tool_dir/pyvenv.cfg" <<EOF
+home = $python_home
+implementation = CPython
+version_info = 3.8.20
+EOF
+
+    cat >"$python_home/python3.8" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$python_home/python3.8"
+
+    cat >"$fake_bin/uv" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+printf 'uv %s\n' "$*" >>"${TEST_POWERLINE_LOG:?}"
+exit 0
+EOF
+    chmod +x "$fake_bin/uv"
+
+    cat >"$fake_bin/curl" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+out=""
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      -o)
+        out="$2"
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+done
+printf 'downloaded\n' >"$out"
+EOF
+    chmod +x "$fake_bin/curl"
+
+    cat >"$fake_bin/fc-cache" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$fake_bin/fc-cache"
+
+    (
+        cd "$repo_root/setup.d"
+        PATH="$fake_bin:$temp_home/.local/bin:/usr/bin:/bin" \
+            HOME="$temp_home" \
+            TEST_POWERLINE_LOG="$log_file" \
+            ./70-powerline -f >/tmp/test-70-powerline-repair.log 2>&1
+    ) || {
+        cat /tmp/test-70-powerline-repair.log >&2
+        fail "70-powerline should repair a missing uv tool python shim before installing powerline"
+    }
+
+    [[ -L "$tool_dir/bin/python" ]] || fail "70-powerline should recreate the uv tool python shim"
+    local python_target
+    python_target="$(readlink -f "$tool_dir/bin/python")"
+    assert_eq "$python_target" "$python_home/python3.8" "70-powerline should point the python shim at the interpreter declared in pyvenv.cfg"
+    [[ -L "$temp_home/.local/bin/powerline-daemon" ]] || fail "70-powerline should recreate the user-facing powerline-daemon launcher"
+}
+
 test_53_python_apps_is_executable() {
     [[ -x "$repo_root/setup.d/53-python-apps" ]] || fail "53-python-apps must stay executable so run-parts can install python tools like pre-commit"
 }
@@ -716,6 +796,7 @@ test_51_node_apps_repairs_root_owned_npm_directory
 test_52_go_apps_repairs_root_owned_cache_directory
 test_56_brew_apps_installs_formulae_sequentially
 test_70_powerline_repairs_root_owned_uv_cache
+test_70_powerline_repairs_missing_uv_tool_python_shim
 test_53_python_apps_is_executable
 test_53_python_apps_removes_malformed_uv_tools
 test_setup_bootstraps_pre_commit_from_uv
