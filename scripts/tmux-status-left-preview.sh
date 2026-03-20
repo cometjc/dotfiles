@@ -13,7 +13,7 @@ status_left_plain="$(printf '%s' "$status_left_rendered" | strip_styles)"
 
 window_list_plain=""
 while IFS= read -r window_id; do
-    marker="$("$HOME/repo/dotfiles/scripts/tmux-window-viewport-marker.sh" "$window_id" 'esc to interrupt')"
+    marker="$("$HOME/repo/dotfiles/scripts/tmux-window-status.sh" symbol "$window_id")"
     label="$("$HOME/repo/dotfiles/scripts/tmux-window-label.sh" "$window_id")"
 
     window_list_plain+="${marker}${label}"
