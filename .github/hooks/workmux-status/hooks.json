@@ -7,7 +7,7 @@
         "bash": "$HOME/repo/dotfiles/scripts/workmux-hook-start.sh"
       }
     ],
-    "agentStop": [
+    "sessionEnd": [
       {
         "type": "command",
         "bash": "$HOME/repo/dotfiles/scripts/workmux-hook-done.sh"
