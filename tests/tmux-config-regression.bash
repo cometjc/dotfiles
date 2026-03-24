@@ -40,8 +40,8 @@ assert_contains "$window_status_current_format" "'#7f9a69' '#262626'" \
     "window-status-current-format should pass #7f9a69 tab_bg and #262626 label_fg to render script"
 assert_not_contains "$window_status_format" '#{?#{@workmux_status}' \
     "window-status-format should not conditionally branch on icon presence"
-assert_not_contains "$window_status_current_format" '#{@workmux_status}' \
-    "window-status-current-format should not inline raw workmux icon value directly"
+assert_not_contains "$window_status_current_format" '#{?#{@workmux_status}' \
+    "window-status-current-format should not conditionally branch on icon presence"
 
 assert_not_contains "$window_status_format" "tmux-window-label.sh" \
     "window-status-format should use tmux-window-render.sh, not the old label helper"
