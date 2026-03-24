@@ -40,24 +40,8 @@ esac
 # as the current window.
 printf '#[noreverse,nobold,noitalics]'
 
-# Resolve label colour and tab background: unread windows (done/waiting icon)
-# use a warm highlight background and brighter text to stand out.
-# Only apply for non-current windows (current tab_bg is #7f9a69).
-case "$status" in
-    '✅' | '💬')
-        if [[ "$tab_bg" != "#7f9a69" ]]; then
-            resolved_tab_bg="#e5c07b"   # bright yellow — unread highlight bg
-            resolved_label_fg="#262626" # dark text on yellow
-        else
-            resolved_tab_bg="$tab_bg"
-            resolved_label_fg="$label_fg"
-        fi
-        ;;
-    *)
-        resolved_tab_bg="$tab_bg"
-        resolved_label_fg="$label_fg"
-        ;;
-esac
+resolved_tab_bg="$tab_bg"
+resolved_label_fg="$label_fg"
 
 # Entry: gap(#262626) → icon_bg → tab_bg
 if [[ -n "$icon_bg" ]]; then
