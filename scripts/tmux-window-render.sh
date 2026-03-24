@@ -46,8 +46,8 @@ printf '#[noreverse,nobold,noitalics]'
 case "$status" in
     '✅' | '💬')
         if [[ "$tab_bg" != "#7f9a69" ]]; then
-            resolved_tab_bg="#3d3020"   # dark warm amber — unread highlight bg
-            resolved_label_fg="#e69875" # warm orange text
+            resolved_tab_bg="#e5c07b"   # bright yellow — unread highlight bg
+            resolved_label_fg="#262626" # dark text on yellow
         else
             resolved_tab_bg="$tab_bg"
             resolved_label_fg="$label_fg"
