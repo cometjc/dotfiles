@@ -4,13 +4,13 @@
     "userPromptSubmitted": [
       {
         "type": "command",
-        "bash": "workmux set-window-status working && tmux refresh-client -S 2>/dev/null || true"
+        "bash": "$HOME/repo/dotfiles/scripts/workmux-hook-start.sh"
       }
     ],
     "agentStop": [
       {
         "type": "command",
-        "bash": "workmux set-window-status done && tmux refresh-client -S 2>/dev/null || true"
+        "bash": "$HOME/repo/dotfiles/scripts/workmux-hook-done.sh"
       }
     ]
   }
