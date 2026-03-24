@@ -30,27 +30,23 @@ assert_not_contains() {
 window_status_format="$(grep -F 'set-option -g  window-status-format' "$tmux_conf")"
 window_status_current_format="$(grep -F 'set-option -g  window-status-current-format' "$tmux_conf")"
 
-assert_contains "$window_status_format" "tmux-workmux-status.sh" \
+assert_contains "$window_status_format" "tmux-window-render.sh" \
     "window-status-format should style workmux icons through the tmux-side helper"
-assert_contains "$window_status_current_format" "tmux-workmux-status.sh" \
+assert_contains "$window_status_current_format" "tmux-window-render.sh" \
     "window-status-current-format should style workmux icons through the tmux-side helper"
-assert_contains "$window_status_format" "prefix '#3a3a3a'" \
-    "window-status-format should call the prefix mode with #3a3a3a fallback_bg"
-assert_contains "$window_status_format" "suffix '#3a3a3a'" \
-    "window-status-format should call the suffix mode with #3a3a3a fallback_bg"
-assert_contains "$window_status_current_format" "prefix '#7f9a69'" \
-    "window-status-current-format should call the prefix mode with #7f9a69 (active) fallback_bg"
-assert_contains "$window_status_current_format" "suffix '#7f9a69'" \
-    "window-status-current-format should call the suffix mode with #7f9a69 (active) fallback_bg"
+assert_contains "$window_status_format" "'#3a3a3a' '#a7c080'" \
+    "window-status-format should pass #3a3a3a tab_bg and #a7c080 label_fg to render script"
+assert_contains "$window_status_current_format" "'#7f9a69' '#262626'" \
+    "window-status-current-format should pass #7f9a69 tab_bg and #262626 label_fg to render script"
 assert_not_contains "$window_status_format" '#{?#{@workmux_status}' \
-    "window-status-format label colour should be unconditional #a7c080 (name area bg is always #3a3a3a)"
+    "window-status-format should not conditionally branch on icon presence"
 assert_not_contains "$window_status_current_format" '#{@workmux_status}' \
     "window-status-current-format should not inline raw workmux icon value directly"
 
-assert_contains "$window_status_format" "tmux-window-label.sh" \
-    "window-status-format should keep the custom window label renderer"
-assert_contains "$window_status_current_format" "tmux-window-label.sh" \
-    "window-status-current-format should keep the custom window label renderer"
+assert_not_contains "$window_status_format" "tmux-window-label.sh" \
+    "window-status-format should use tmux-window-render.sh, not the old label helper"
+assert_not_contains "$window_status_current_format" "tmux-window-label.sh" \
+    "window-status-current-format should use tmux-window-render.sh, not the old label helper"
 
 assert_not_contains "$window_status_format" "tmux-window-status.sh render" \
     "window-status-format should not call the legacy render helper"
