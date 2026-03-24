@@ -23,7 +23,7 @@ create_fake_tmux_env() {
     temp_dir="$(mktemp -d)"
     state_dir="$temp_dir/state"
     fake_bin="$temp_dir/bin"
-    mkdir -p "$state_dir/windows" "$state_dir/panes" "$state_dir/options" "$fake_bin"
+    mkdir -p "$state_dir/windows" "$state_dir/panes" "$state_dir/pane_commands" "$state_dir/options" "$fake_bin"
 
     cat >"$fake_bin/tmux" <<'EOF'
 #!/bin/bash
@@ -45,6 +45,7 @@ option_file() {
 case "$command" in
     list-panes)
         target=""
+        format='#{pane_id}'
         while (($#)); do
             case "$1" in
                 -t)
@@ -52,6 +53,7 @@ case "$command" in
                     shift 2
                     ;;
                 -F)
+                    format="$2"
                     shift 2
                     ;;
                 *)
@@ -59,7 +61,21 @@ case "$command" in
                     ;;
             esac
         done
-        cat "$state_dir/windows/$target"
+        while IFS= read -r pane_id; do
+            case "$format" in
+                '#{pane_id}')
+                    printf '%s\n' "$pane_id"
+                    ;;
+                '#{pane_current_command}')
+                    cat "$state_dir/pane_commands/$pane_id"
+                    printf '\n'
+                    ;;
+                *)
+                    echo "unsupported fake tmux list-panes format: $format" >&2
+                    exit 1
+                    ;;
+            esac
+        done <"$state_dir/windows/$target"
         ;;
     capture-pane)
         target=""
@@ -108,19 +124,28 @@ case "$command" in
     set-option)
         target=""
         option_name=""
+        unset_option=0
         while (($#)); do
             case "$1" in
                 -t)
                     target="$2"
                     shift 2
                     ;;
+                -uw|-u|-wu)
+                    unset_option=1
+                    shift
+                    ;;
                 -wq|-q|-w)
                     shift
                     ;;
                 @*)
                     option_name="$1"
-                    option_value="$2"
-                    shift 2
+                    if ((unset_option)); then
+                        shift
+                    else
+                        option_value="$2"
+                        shift 2
+                    fi
                     ;;
                 *)
                     shift
@@ -129,7 +154,11 @@ case "$command" in
         done
         option_path="$(option_file "$target" "$option_name")"
         mkdir -p "$(dirname "$option_path")"
-        printf '%s' "$option_value" >"$option_path"
+        if ((unset_option)); then
+            rm -f "$option_path"
+        else
+            printf '%s' "$option_value" >"$option_path"
+        fi
         ;;
     *)
         echo "unsupported fake tmux command: $command" >&2
@@ -147,9 +176,11 @@ write_window_content() {
     local window_id="$2"
     local pane_id="$3"
     local content="$4"
+    local pane_command="${5:-codex}"
 
     printf '%s\n' "$pane_id" >"$state_dir/windows/$window_id"
     printf '%s' "$content" >"$state_dir/panes/$pane_id"
+    printf '%s' "$pane_command" >"$state_dir/pane_commands/$pane_id"
 }
 
 read_window_option() {
@@ -305,6 +336,66 @@ test_detect_returns_idle_when_no_status_markers_exist() {
     assert_eq "$actual" "idle" "detect should return idle when no status markers are visible"
 }
 
+test_sync_workmux_sets_working_icon_for_running_codex_window() {
+    local fake_root state_dir icon
+    fake_root="$(create_fake_tmux_env)"
+    trap 'rm -rf "$fake_root"' RETURN
+    state_dir="$fake_root/state"
+
+    write_window_content "$state_dir" "@1" "%1" $'• esc to interrupt\n'
+    WORKMUX_ICON_WORKING='WORKING_ICON' run_status_script "$fake_root" sync-workmux "@1" >/dev/null
+    icon="$(read_window_option "$state_dir" "@1" "@workmux_status")"
+
+    assert_eq "$icon" "WORKING_ICON" "running Codex windows should publish the working icon via @workmux_status"
+}
+
+test_sync_workmux_sets_done_icon_until_marked_read() {
+    local fake_root state_dir icon
+    fake_root="$(create_fake_tmux_env)"
+    trap 'rm -rf "$fake_root"' RETURN
+    state_dir="$fake_root/state"
+
+    write_window_content "$state_dir" "@1" "%1" $'• esc to interrupt\n'
+    WORKMUX_ICON_WORKING='WORKING_ICON' run_status_script "$fake_root" sync-workmux "@1" >/dev/null
+    write_window_content "$state_dir" "@1" "%1" $'response body\n· gpt-5.4\n'
+    WORKMUX_ICON_DONE='DONE_ICON' run_status_script "$fake_root" sync-workmux "@1" >/dev/null
+    icon="$(read_window_option "$state_dir" "@1" "@workmux_status")"
+    assert_eq "$icon" "DONE_ICON" "completed Codex windows should expose the done icon while unread"
+
+    run_status_script "$fake_root" mark-read "@1" >/dev/null
+    WORKMUX_ICON_DONE='DONE_ICON' run_status_script "$fake_root" sync-workmux "@1" >/dev/null
+    icon="$(read_window_option "$state_dir" "@1" "@workmux_status")"
+    assert_eq "${icon:-}" "" "mark-read should hide done icons for the polling fallback"
+}
+
+test_sync_workmux_does_not_touch_non_codex_windows() {
+    local fake_root state_dir icon
+    fake_root="$(create_fake_tmux_env)"
+    trap 'rm -rf "$fake_root"' RETURN
+    state_dir="$fake_root/state"
+
+    write_window_content "$state_dir" "@1" "%1" $'plain shell output\n'
+    run_status_script "$fake_root" sync-workmux "@1" >/dev/null
+    icon="$(read_window_option "$state_dir" "@1" "@workmux_status")"
+
+    assert_eq "${icon:-}" "" "sync-workmux should not clear or set workmux status for unrelated windows"
+}
+
+test_sync_workmux_does_not_override_other_agent_hook_status() {
+    local fake_root state_dir icon
+    fake_root="$(create_fake_tmux_env)"
+    trap 'rm -rf "$fake_root"' RETURN
+    state_dir="$fake_root/state"
+
+    write_window_content "$state_dir" "@1" "%1" $'response body\n· gpt-5.4\n' "copilot"
+    TEST_TMUX_STATE_DIR="$state_dir" PATH="$fake_root/bin:/usr/bin:/bin" tmux set-option -wq -t "@1" @workmux_status "COPILOT_WORKING"
+
+    run_status_script "$fake_root" sync-workmux "@1" >/dev/null
+    icon="$(read_window_option "$state_dir" "@1" "@workmux_status")"
+
+    assert_eq "$icon" "COPILOT_WORKING" "sync-workmux should not override hook-managed status in non-Codex windows"
+}
+
 test_detect_prioritizes_running_over_waiting_and_done
 test_detect_returns_waiting_when_not_running
 test_detect_returns_done_when_gpt_marker_is_present_without_running_or_waiting
@@ -314,5 +405,9 @@ test_running_symbol_uses_spinner_frames
 test_sync_marks_running_to_done_as_unread_and_uses_checkmark
 test_direct_done_does_not_become_unread_without_running_transition
 test_detect_returns_idle_when_no_status_markers_exist
+test_sync_workmux_sets_working_icon_for_running_codex_window
+test_sync_workmux_sets_done_icon_until_marked_read
+test_sync_workmux_does_not_touch_non_codex_windows
+test_sync_workmux_does_not_override_other_agent_hook_status
 
 echo "All tmux status regression tests passed"
