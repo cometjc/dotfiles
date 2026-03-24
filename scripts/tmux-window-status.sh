@@ -97,10 +97,22 @@ sync_state() {
 }
 
 mark_read() {
-    local current_state last_state
+    local current_state last_state workmux_status
 
     current_state="$(detect_state)"
     last_state="$(get_window_option "$window_state_option")"
+    workmux_status="$(get_window_option "$workmux_status_option")"
+
+    # Always clear workmux unread status and bust cache when window is focused,
+    # even if this is a plain idle window with no codex history.
+    if [[ -n "$workmux_status" ]]; then
+        unset_window_option "$workmux_status_option" 2>/dev/null || true
+        local seq
+        seq="$(tmux show-options -gqv @workmux_render_seq 2>/dev/null || true)"
+        seq="${seq:-0}"
+        tmux set-option -g @workmux_render_seq "$((seq + 1))" 2>/dev/null || true
+        tmux refresh-client -S 2>/dev/null || true
+    fi
 
     if [[ "$current_state" == "idle" && -z "$last_state" ]]; then
         return 0
@@ -116,16 +128,6 @@ mark_read() {
             set_window_option "$window_unread_option" 0
             ;;
     esac
-
-    # Clear workmux done/waiting status so unread highlight disappears on focus
-    unset_window_option "$workmux_status_option" 2>/dev/null || true
-
-    # Bust #() cache so the re-render happens immediately
-    local seq
-    seq="$(tmux show-options -gqv @workmux_render_seq 2>/dev/null || true)"
-    seq="${seq:-0}"
-    tmux set-option -g @workmux_render_seq "$((seq + 1))" 2>/dev/null || true
-    tmux refresh-client -S 2>/dev/null || true
 }
 
 symbol_for_state() {
