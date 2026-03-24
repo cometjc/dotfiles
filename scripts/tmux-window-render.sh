@@ -40,6 +40,13 @@ esac
 # as the current window.
 printf '#[noreverse,nobold,noitalics]'
 
+# Resolve label colour: unread windows (done/waiting icon, not current)
+# use a warm highlight so they stand out; working/empty use the normal colour.
+case "$status" in
+    '✅' | '💬') resolved_label_fg="#e69875" ;; # unread: warm highlight
+    *) resolved_label_fg="$label_fg" ;;
+esac
+
 # Entry: gap(#262626) → icon_bg → tab_bg
 if [[ -n "$icon_bg" ]]; then
     # gap → icon badge
@@ -54,7 +61,7 @@ else
 fi
 
 # Label
-printf '#[fg=%s,nobold]%s' "$label_fg" "$window_name"
+printf '#[fg=%s,nobold]%s' "$resolved_label_fg" "$window_name"
 
 # Exit: name area → gap
 printf '#[fg=%s,bg=#262626]%s' "$tab_bg" "$sep"
