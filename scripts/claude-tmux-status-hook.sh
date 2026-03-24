@@ -59,6 +59,8 @@ case "$event" in
         set_window_status ""
         # shellcheck disable=SC1010
         workmux set-window-status done 2>/dev/null || true
+        SEQ=$(tmux show-options -gqv @workmux_render_seq 2>/dev/null || echo 0)
+        tmux set-option -g @workmux_render_seq "$((SEQ + 1))" 2>/dev/null || true
         tmux refresh-client -S 2>/dev/null || true
         ;;
 esac
