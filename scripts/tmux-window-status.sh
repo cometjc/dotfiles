@@ -117,11 +117,15 @@ mark_read() {
             ;;
     esac
 
-    # Bust #() cache so the unread highlight clears immediately on focus
+    # Clear workmux done/waiting status so unread highlight disappears on focus
+    unset_window_option "$workmux_status_option" 2>/dev/null || true
+
+    # Bust #() cache so the re-render happens immediately
     local seq
     seq="$(tmux show-options -gqv @workmux_render_seq 2>/dev/null || true)"
     seq="${seq:-0}"
     tmux set-option -g @workmux_render_seq "$((seq + 1))" 2>/dev/null || true
+    tmux refresh-client -S 2>/dev/null || true
 }
 
 symbol_for_state() {
