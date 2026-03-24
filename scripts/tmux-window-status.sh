@@ -116,6 +116,12 @@ mark_read() {
             set_window_option "$window_unread_option" 0
             ;;
     esac
+
+    # Bust #() cache so the unread highlight clears immediately on focus
+    local seq
+    seq="$(tmux show-options -gqv @workmux_render_seq 2>/dev/null || true)"
+    seq="${seq:-0}"
+    tmux set-option -g @workmux_render_seq "$((seq + 1))" 2>/dev/null || true
 }
 
 symbol_for_state() {
