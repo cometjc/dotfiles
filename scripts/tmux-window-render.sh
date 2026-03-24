@@ -35,6 +35,11 @@ case "$status" in
     *) icon_bg="" ;;
 esac
 
+# Reset any list-mode attributes (e.g. reverse from #{W:...} list rendering)
+# before applying our explicit colours so non-current windows render the same
+# as the current window.
+printf '#[noreverse,nobold,noitalics]'
+
 # Entry: gap(#262626) → icon_bg → tab_bg
 if [[ -n "$icon_bg" ]]; then
     # gap → icon badge
