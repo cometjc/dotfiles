@@ -3,6 +3,8 @@
 # ignore local setting
 /.vscode
 /.gitconfig
+/.workmux.yaml
+/.claude
 
 *.pyc
 .tags*
