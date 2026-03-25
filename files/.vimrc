@@ -582,8 +582,8 @@ nnoremap <silent> <M-Down>    :call <SID>LocationNext()<CR>
 nnoremap <silent> <S-Down>    :call Next_err()<CR>
 map  <C-Down>    <Plug>(GitGutterNextHunk)
 map! <C-Down>    <Plug>(GitGutterNextHunk)
-map <M-S-left>    <Plug>AirlineSelectPrevTab " previous buffer
-map <M-S-right>   <Plug>AirlineSelectNextTab " next buffer
+map <C-left>    <Plug>AirlineSelectPrevTab " previous buffer
+map <C-right>   <Plug>AirlineSelectNextTab " next buffer
 map <C-S-Left>  :tabmove -1<CR>            " move tab to left
 map <C-S-Right> :tabmove +1<CR>            " move tab to right
 
