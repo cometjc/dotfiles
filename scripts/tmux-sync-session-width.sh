@@ -25,7 +25,7 @@ if [[ -z "$min_width" ]]; then
 fi
 
 left_width="$(
-    $HOME/repo/dotfiles/scripts/tmux-status-left-preview.sh "$session_name" \
+    "$HOME"/repo/tmux-agent-status/scripts/tmux-status-left-preview.sh "$session_name" \
         | awk '/^== left-width ==$/{getline; print; exit}'
 )"
 

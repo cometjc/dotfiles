@@ -27,38 +27,70 @@ assert_not_contains() {
     fi
 }
 
-window_status_format="$(grep -F 'set-option -g  window-status-format' "$tmux_conf")"
-window_status_current_format="$(grep -F 'set-option -g  window-status-current-format' "$tmux_conf")"
-
-assert_contains "$window_status_format" "tmux-window-render.sh" \
-    "window-status-format should style workmux icons through the tmux-side helper"
-assert_contains "$window_status_current_format" "tmux-window-render.sh" \
-    "window-status-current-format should style workmux icons through the tmux-side helper"
-assert_contains "$window_status_format" "'#3a3a3a' '#a7c080'" \
-    "window-status-format should pass #3a3a3a tab_bg and #a7c080 label_fg to render script"
-assert_contains "$window_status_current_format" "'#7f9a69' '#262626'" \
-    "window-status-current-format should pass #7f9a69 tab_bg and #262626 label_fg to render script"
-assert_not_contains "$window_status_format" '#{?#{@workmux_status}' \
-    "window-status-format should not conditionally branch on icon presence"
-assert_not_contains "$window_status_current_format" '#{?#{@workmux_status}' \
-    "window-status-current-format should not conditionally branch on icon presence"
-
-assert_not_contains "$window_status_format" "tmux-window-label.sh" \
-    "window-status-format should use tmux-window-render.sh, not the old label helper"
-assert_not_contains "$window_status_current_format" "tmux-window-label.sh" \
-    "window-status-current-format should use tmux-window-render.sh, not the old label helper"
-
-assert_not_contains "$window_status_format" "tmux-window-status.sh render" \
-    "window-status-format should not call the legacy render helper"
-assert_not_contains "$window_status_current_format" "tmux-window-status.sh render" \
-    "window-status-current-format should not call the legacy render helper"
-assert_contains "$window_status_format" "tmux-window-status.sh sync-workmux" \
-    "window-status-format should poll Codex state into @workmux_status"
-assert_contains "$window_status_current_format" "tmux-window-status.sh sync-workmux" \
-    "window-status-current-format should poll Codex state into @workmux_status"
-
 full_conf="$(cat "$tmux_conf")"
-assert_contains "$full_conf" "tmux-window-status.sh mark-read" \
-    "tmux.conf should keep the mark-read hook so polling-based Codex done/waiting icons clear after focus"
+assert_contains "$full_conf" "@plugin                  '\$HOME/repo/tmux-agent-status'" \
+    "tmux.conf should load tmux-agent-status as a local TPM plugin via \$HOME expansion"
+assert_contains "$full_conf" "tmux-local-plugins-loader.sh" \
+    "tmux.conf should invoke the local-plugin loader so local @plugin paths are actually executed"
+assert_not_contains "$full_conf" "\$HOME/repo/dotfiles/scripts/tmux-window-status.sh" \
+    "tmux.conf should not reference the old dotfiles tmux-window-status script directly"
+assert_not_contains "$full_conf" "\$HOME/repo/dotfiles/scripts/tmux-window-render.sh" \
+    "tmux.conf should not reference the old dotfiles tmux-window-render script directly"
+
+mapfile -t c_z_binding_lines < <(grep -E '^[[:space:]]*bind-key[[:space:]]+-n[[:space:]]+C-z([[:space:]]|$)' "$tmux_conf" || true)
+if [[ "${#c_z_binding_lines[@]}" -eq 0 ]]; then
+    fail "tmux.conf should define exactly one bare C-z binding (missing)"
+fi
+if [[ "${#c_z_binding_lines[@]}" -ne 1 ]]; then
+    fail "tmux.conf should define exactly one bare C-z binding (found ${#c_z_binding_lines[@]})"
+fi
+c_z_binding_line="${c_z_binding_lines[0]}"
+assert_contains "$c_z_binding_line" "send-keys C-z" \
+    "bare C-z binding must send a literal Ctrl-z to the pane first"
+assert_contains "$c_z_binding_line" 'send-keys "bg" Enter' \
+    "bare C-z binding must background the most recent job through bg"
+
+tmux_socket="$repo_root/.tmux-c-z-test.sock"
+rm -f "$tmux_socket"
+tmux_cmd=(tmux -S "$tmux_socket" -f /dev/null)
+cleanup_tmux_server() {
+    "${tmux_cmd[@]}" kill-server >/dev/null 2>&1 || true
+    rm -f "$tmux_socket"
+}
+trap cleanup_tmux_server EXIT
+
+"${tmux_cmd[@]}" new-session -d -s cztmp >/dev/null
+tmux_ready=0
+for _ in {1..20}; do
+    if "${tmux_cmd[@]}" list-sessions >/dev/null 2>&1; then
+        tmux_ready=1
+        break
+    fi
+    sleep 0.1
+done
+if [[ "$tmux_ready" -ne 1 ]]; then
+    fail "isolated tmux test server did not become ready"
+fi
+
+if ! printf '%s\n' "$c_z_binding_line" | "${tmux_cmd[@]}" source-file -; then
+    fail "isolated tmux test server failed to source the bare C-z binding"
+fi
+
+root_keys="$("${tmux_cmd[@]}" list-keys -T root)"
+assert_contains "$root_keys" "C-z" \
+    "root table should register the bare C-z background binding"
+assert_contains "$root_keys" "send-keys bg Enter" \
+    "root table should canonicalize the background binding to send-keys bg Enter"
+
+prefix_keys="$("${tmux_cmd[@]}" list-keys -T prefix)"
+copy_mode_keys="$("${tmux_cmd[@]}" list-keys -T copy-mode)"
+copy_mode_vi_keys="$("${tmux_cmd[@]}" list-keys -T copy-mode-vi)"
+
+assert_not_contains "$prefix_keys" "send-keys bg Enter" \
+    "prefix table must not register the bare C-z background binding"
+assert_not_contains "$copy_mode_keys" "send-keys bg Enter" \
+    "copy-mode table must not register the bare C-z background binding"
+assert_not_contains "$copy_mode_vi_keys" "send-keys bg Enter" \
+    "copy-mode-vi table must not register the bare C-z background binding"
 
 echo "All tmux config regression tests passed"

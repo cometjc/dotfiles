@@ -4,13 +4,13 @@
     "userPromptSubmitted": [
       {
         "type": "command",
-        "bash": "$HOME/repo/dotfiles/scripts/workmux-hook-start.sh"
+        "bash": "$HOME/repo/tmux-agent-status/scripts/workmux-hook-start.sh"
       }
     ],
     "sessionEnd": [
       {
         "type": "command",
-        "bash": "$HOME/repo/dotfiles/scripts/workmux-hook-done.sh"
+        "bash": "$HOME/repo/tmux-agent-status/scripts/workmux-hook-done.sh"
       }
     ]
   }
