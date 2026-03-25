@@ -1,4 +1,71 @@
 #!/usr/bin/env bash
+#
+# ─── DESIGN: Agent status & unread mechanism ─────────────────────────────────
+#
+# STATE OPTIONS (per-window)
+#   @workmux_status        Icon emoji set by agent hooks or Codex detection.
+#                          Values: 🤖 (running)  💬 (waiting)  ✅ (done)  "" (idle)
+#   @codex_status_unread   Unread flag.
+#                          "1"  = explicitly unread (Codex path)
+#                          "0"  = explicitly cleared (mark_read ran)
+#                          ""   = never written (workmux-hooked windows)
+#   @codex_status_last_state  Last known Codex state string; "" for non-Codex windows.
+#
+# GLOBAL OPTIONS
+#   @workmux_render_seq    Monotonically increasing counter used as a cache-bust
+#                          key in window-status-format args.  Incrementing it
+#                          forces tmux to re-execute the #() render command.
+#
+# TWO ICON-SETTING PATHS
+#   Codex path    sync_workmux_status detects state by scanning pane content,
+#                 calls sync_state which writes both @workmux_status AND
+#                 @codex_status_unread ("1" on transition to done/waiting).
+#
+#   Workmux path  External workmux hooks set @workmux_status directly.
+#                 @codex_status_unread is never touched → stays "".
+#
+# UNREAD INFERENCE (render script)
+#   The render script treats a window as unread when:
+#     • @codex_status_unread == "1"  (Codex path explicit)
+#     • @codex_status_unread == ""   AND icon ∈ {✅, 💬}  (workmux implicit)
+#   @codex_status_unread == "0" (mark_read cleared it) → never unread.
+#   Current window (@window_active == 1) never shows the orange highlight.
+#
+# MARK-READ INVARIANT
+#   mark_read MUST write @codex_status_unread = 0 AND increment
+#   @workmux_render_seq whenever needs_bust is true — even if the early-return
+#   branch fires (idle + no last_state).  Workmux-hooked windows always hit
+#   that early return; writing the flag inside the needs_bust block is the only
+#   place where the clear is guaranteed to land.
+#
+# ICON LIFETIME
+#   Icon persists as long as the agent program is open (running/waiting/done).
+#   It is cleared only when the agent exits (idle state via sync_workmux_status).
+#   mark_read does NOT clear the icon — it only clears the unread highlight.
+#
+# PRINCIPLES TO PRESERVE
+#   1. Never clear @workmux_status in mark_read.
+#   2. Always bust @workmux_render_seq when clearing unread (both paths).
+#   3. Write @codex_status_unread = 0 before any early return when needs_bust.
+#   4. The render script must read @codex_status_unread raw (before :-0 default)
+#      to distinguish "never written" ("") from "explicitly cleared" ("0").
+#
+# TESTING
+#   Unit / regression:
+#     bash tests/tmux-status-regression.bash   # state machine + mark_read logic
+#     bash tests/tmux-config-regression.bash    # .tmux.conf format string shape
+#
+#   Manual (Codex path):
+#     1. Open a Codex window and run a task.
+#     2. Switch to another window while Codex is running.
+#     3. When Codex finishes, the non-current window label should turn orange.
+#     4. Switch back to the Codex window → orange clears immediately.
+#     5. Switch away again → label stays normal.
+#
+#   Manual (workmux path / Claude Code):
+#     Same steps as above; workmux hooks fire instead of pane detection.
+#     Confirm orange appears on ✅/💬 and clears on focus.
+# ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
 
@@ -97,37 +164,49 @@ sync_state() {
 }
 
 mark_read() {
-    local current_state last_state workmux_status
+    local current_state last_state unread workmux_status
 
     current_state="$(detect_state)"
     last_state="$(get_window_option "$window_state_option")"
+    unread="$(get_window_option "$window_unread_option")"
     workmux_status="$(get_window_option "$workmux_status_option")"
 
-    # Always clear workmux unread status and bust cache when window is focused,
-    # even if this is a plain idle window with no codex history.
-    if [[ -n "$workmux_status" ]]; then
-        unset_window_option "$workmux_status_option" 2>/dev/null || true
+    # Bust render cache when clearing the unread highlight so the orange
+    # label disappears immediately on focus.  The icon itself is NOT cleared
+    # here — it persists until the agent exits (idle state via sync_workmux_status).
+    #
+    # Also bust when @codex_status_unread is unset (empty) and a completion icon
+    # is present: workmux-hooked windows (Claude Code) set @workmux_status
+    # directly without touching @codex_status_unread, so an unset flag on ✅/💬
+    # means it is being seen for the first time and the orange must clear.
+    local needs_bust=0
+    if [[ "$unread" == "1" ]]; then
+        needs_bust=1
+    elif [[ -z "$unread" && ("$workmux_status" == '✅' || "$workmux_status" == '💬') ]]; then
+        needs_bust=1
+    fi
+
+    if ((needs_bust)); then
         local seq
         seq="$(tmux show-options -gqv @workmux_render_seq 2>/dev/null || true)"
         seq="${seq:-0}"
         tmux set-option -g @workmux_render_seq "$((seq + 1))" 2>/dev/null || true
         tmux refresh-client -S 2>/dev/null || true
+        # Write the cleared flag now so the render script sees "0" after the
+        # cache bust.  This is needed for workmux-hooked windows (Claude Code)
+        # where @codex_status_unread starts unset ("") and the early-return
+        # below would otherwise exit before the flag gets written.
+        set_window_option "$window_unread_option" 0
     fi
+
+    unread="${unread:-0}"
 
     if [[ "$current_state" == "idle" && -z "$last_state" ]]; then
         return 0
     fi
 
     set_window_option "$window_state_option" "$current_state"
-
-    case "$current_state" in
-        waiting | done)
-            set_window_option "$window_unread_option" 0
-            ;;
-        running | idle)
-            set_window_option "$window_unread_option" 0
-            ;;
-    esac
+    set_window_option "$window_unread_option" 0
 }
 
 symbol_for_state() {
@@ -208,7 +287,7 @@ icon_from_workmux_config() {
 }
 
 sync_workmux_status() {
-    local current_state last_state unread icon
+    local current_state last_state icon
 
     if ! is_codex_window; then
         return 0
@@ -222,29 +301,22 @@ sync_workmux_status() {
     fi
 
     current_state="$(sync_state)"
-    unread="$(get_window_option "$window_unread_option")"
-    unread="${unread:-0}"
 
+    # Icon persists as long as the agent program is open (running/waiting/done).
+    # It is cleared only when the agent exits (idle).  The unread flag is
+    # managed separately by mark_read and controls the orange label highlight.
     case "$current_state" in
         running)
             icon="$(status_icon_for_state running)"
             set_window_option "$workmux_status_option" "$icon"
             ;;
         waiting)
-            if [[ "$unread" == "1" ]]; then
-                icon="$(status_icon_for_state waiting)"
-                set_window_option "$workmux_status_option" "$icon"
-            else
-                unset_window_option "$workmux_status_option"
-            fi
+            icon="$(status_icon_for_state waiting)"
+            set_window_option "$workmux_status_option" "$icon"
             ;;
         "done")
-            if [[ "$unread" == "1" ]]; then
-                icon="$(status_icon_for_state "done")"
-                set_window_option "$workmux_status_option" "$icon"
-            else
-                unset_window_option "$workmux_status_option"
-            fi
+            icon="$(status_icon_for_state "done")"
+            set_window_option "$workmux_status_option" "$icon"
             ;;
         idle)
             unset_window_option "$workmux_status_option"

@@ -3,6 +3,9 @@
 #   [entry arrow] [icon badge] [label] [exit arrow]
 # All tmux reads happen in one process, so there is no caching race between
 # the prefix, label and suffix calls that previously used separate #() entries.
+#
+# Unread highlight: orange tab_bg + black label_fg on non-current windows.
+# See tmux-window-status.sh header for full design doc and principles.
 
 set -euo pipefail
 
@@ -18,9 +21,14 @@ label_fg="${3:-#a7c080}"
 sep=$'\xee\x82\xb0'
 
 status="$(tmux show-options -wqv -t "$window_id" @workmux_status 2>/dev/null || true)"
+unread_raw="$(tmux show-options -wqv -t "$window_id" @codex_status_unread 2>/dev/null || true)"
+unread="${unread_raw:-0}"
 
-# Resolve window name (fall back to cwd basename)
-window_name="$(tmux display-message -p -t "$window_id" '#W' 2>/dev/null || true)"
+# Resolve window name (fall back to cwd basename) and active flag in one call.
+window_info="$(tmux display-message -p -t "$window_id" '#W|#{window_active}' 2>/dev/null || true)"
+window_name="${window_info%|*}"
+window_active="${window_info##*|}"
+
 if [[ -z "$window_name" ]]; then
     window_path="$(tmux display-message -p -t "$window_id" '#{pane_current_path}' 2>/dev/null || true)"
     window_name="${window_path##*/}"
@@ -35,13 +43,33 @@ case "$status" in
     *) icon_bg="" ;;
 esac
 
+# Unread highlight: orange label bg + black text for non-current windows with
+# pending activity.  Current window (window_active=1) is already focused, so
+# the notification is implicitly seen — no highlight applied.
+#
+# Workmux-hooked windows (Claude Code) set @workmux_status directly without
+# touching @codex_status_unread.  Treat a completion icon (✅ or 💬) with an
+# unset flag (neither "1" nor the explicit "0" written by mark_read) as
+# implicitly unread so the orange label appears immediately on completion.
+is_unread=0
+if [[ "$unread" == "1" ]]; then
+    is_unread=1
+elif [[ -z "$unread_raw" && ("$status" == '✅' || "$status" == '💬') ]]; then
+    # Workmux-hooked windows set @workmux_status without touching
+    # @codex_status_unread.  An unset (never written) flag on a completion
+    # icon means it has not yet been seen — treat as implicitly unread.
+    is_unread=1
+fi
+
+if [[ "$is_unread" == "1" && "$window_active" != "1" ]]; then
+    tab_bg="#f4a261"
+    label_fg="#262626"
+fi
+
 # Reset any list-mode attributes (e.g. reverse from #{W:...} list rendering)
 # before applying our explicit colours so non-current windows render the same
 # as the current window.
 printf '#[noreverse,nobold,noitalics]'
-
-resolved_tab_bg="$tab_bg"
-resolved_label_fg="$label_fg"
 
 # Entry: gap(#262626) → icon_bg → tab_bg
 if [[ -n "$icon_bg" ]]; then
@@ -50,14 +78,14 @@ if [[ -n "$icon_bg" ]]; then
     # icon: dark bold text on icon_bg
     printf '#[fg=#262626,bold]%s' "$status"
     # icon → name area
-    printf '#[nobold,fg=%s,bg=%s]%s' "$icon_bg" "$resolved_tab_bg" "$sep"
+    printf '#[nobold,fg=%s,bg=%s]%s' "$icon_bg" "$tab_bg" "$sep"
 else
     # No icon: gap → name area directly
-    printf '#[fg=#262626,bg=%s]%s' "$resolved_tab_bg" "$sep"
+    printf '#[fg=#262626,bg=%s]%s' "$tab_bg" "$sep"
 fi
 
 # Label
-printf '#[fg=%s,nobold]%s' "$resolved_label_fg" "$window_name"
+printf '#[fg=%s,nobold]%s' "$label_fg" "$window_name"
 
 # Exit: name area → gap
-printf '#[fg=%s,bg=#262626]%s' "$resolved_tab_bg" "$sep"
+printf '#[fg=%s,bg=#262626]%s' "$tab_bg" "$sep"

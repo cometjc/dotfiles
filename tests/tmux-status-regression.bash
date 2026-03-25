@@ -349,23 +349,35 @@ test_sync_workmux_sets_working_icon_for_running_codex_window() {
     assert_eq "$icon" "WORKING_ICON" "running Codex windows should publish the working icon via @workmux_status"
 }
 
-test_sync_workmux_sets_done_icon_until_marked_read() {
-    local fake_root state_dir icon
+test_sync_workmux_keeps_icon_until_idle_clears_unread_on_mark_read() {
+    local fake_root state_dir icon unread
     fake_root="$(create_fake_tmux_env)"
     trap 'rm -rf "$fake_root"' RETURN
     state_dir="$fake_root/state"
 
+    # running → done transition sets icon and unread flag
     write_window_content "$state_dir" "@1" "%1" $'• esc to interrupt\n'
     WORKMUX_ICON_WORKING='WORKING_ICON' run_status_script "$fake_root" sync-workmux "@1" >/dev/null
     write_window_content "$state_dir" "@1" "%1" $'response body\n· gpt-5.4\n'
     WORKMUX_ICON_DONE='DONE_ICON' run_status_script "$fake_root" sync-workmux "@1" >/dev/null
     icon="$(read_window_option "$state_dir" "@1" "@workmux_status")"
-    assert_eq "$icon" "DONE_ICON" "completed Codex windows should expose the done icon while unread"
+    assert_eq "$icon" "DONE_ICON" "completed Codex windows should expose the done icon"
+    unread="$(read_window_option "$state_dir" "@1" "@codex_status_unread")"
+    assert_eq "$unread" "1" "running-to-done transition should set unread flag"
 
+    # mark-read clears unread but leaves icon intact (agent still open)
     run_status_script "$fake_root" mark-read "@1" >/dev/null
+    unread="$(read_window_option "$state_dir" "@1" "@codex_status_unread")"
+    assert_eq "${unread:-0}" "0" "mark-read should clear the unread flag"
     WORKMUX_ICON_DONE='DONE_ICON' run_status_script "$fake_root" sync-workmux "@1" >/dev/null
     icon="$(read_window_option "$state_dir" "@1" "@workmux_status")"
-    assert_eq "${icon:-}" "" "mark-read should hide done icons for the polling fallback"
+    assert_eq "$icon" "DONE_ICON" "icon should persist after mark-read while agent is still in done state"
+
+    # idle (agent exits) → icon cleared
+    write_window_content "$state_dir" "@1" "%1" $'plain shell output\n'
+    run_status_script "$fake_root" sync-workmux "@1" >/dev/null
+    icon="$(read_window_option "$state_dir" "@1" "@workmux_status")"
+    assert_eq "${icon:-}" "" "icon should clear when agent exits (idle state)"
 }
 
 test_sync_workmux_does_not_touch_non_codex_windows() {
@@ -406,7 +418,7 @@ test_sync_marks_running_to_done_as_unread_and_uses_checkmark
 test_direct_done_does_not_become_unread_without_running_transition
 test_detect_returns_idle_when_no_status_markers_exist
 test_sync_workmux_sets_working_icon_for_running_codex_window
-test_sync_workmux_sets_done_icon_until_marked_read
+test_sync_workmux_keeps_icon_until_idle_clears_unread_on_mark_read
 test_sync_workmux_does_not_touch_non_codex_windows
 test_sync_workmux_does_not_override_other_agent_hook_status
 
