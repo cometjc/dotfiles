@@ -5,6 +5,7 @@
 /.gitconfig
 /.workmux.yaml
 /.claude
+/.worktrees
 
 *.pyc
 .tags*
