@@ -1,61 +1,80 @@
-# tmux bare `C-z` background binding design
+# tmux bare `C-z` background binding
 
 ## Problem
 
-Inside tmux, the user wants bare `C-z` to suspend the foreground job in the active pane and immediately resume it in the shell background so the process keeps running without requiring a manual `bg`.
+Inside tmux, bare `C-z` should suspend the foreground job in the active pane and resume it in the shell background so the process keeps running without a manual `bg`.
 
-## Approved approach
+The naive implementation sent `C-z` and `bg` back-to-back, which could queue `bg` too early and deliver it to the foreground program instead of the shell.
 
-Add a global tmux key binding in `files/.tmux.conf` using `bind-key -n C-z`.
+## Implemented solution
 
-When triggered, tmux will:
+The final implementation keeps the binding global in tmux's root table, but delegates the sequencing to a helper:
 
-1. Invoke a helper script with the active pane id and the current foreground command name.
-2. Have the helper script send a literal `C-z` keystroke to the active pane.
-3. Wait until `#{pane_current_command}` no longer matches the pre-suspend foreground command, or until a short timeout window expires.
-4. Send `bg` followed by Enter to the same pane.
+- `files/.tmux.conf` binds bare `C-z` with `bind-key -n C-z`
+- the binding calls `scripts/tmux-background-job.sh`
+- the helper receives both `#{pane_id}` and the pre-suspend `#{pane_current_command}`
+- the helper sends literal `C-z` to the active pane
+- the helper waits until both of these are true:
+  - `#{pane_current_command}` no longer matches the original foreground command
+  - the bottom of the pane shows a visible `Stopped ... <command>` marker
+- only then does the helper send `bg` and Enter
 
-This binding is added only to tmux's root table via `bind-key -n`. No copy-mode, prompt, or other table-specific bindings are added.
+If those conditions never stabilize within the configured polling window, the helper still falls back to sending `bg` so the behavior remains bounded.
 
-Supported context:
+## File map
 
-- Guaranteed: normal interactive pane usage where tmux is dispatching keys through the root table.
-- Accepted but undefined: copy-mode, command-prompt, and any other non-root-table interaction context. The design does not add special handling for those modes.
+- `files/.tmux.conf` — bare `C-z` binding in the existing non-prefix keybinding block
+- `scripts/tmux-background-job.sh` — helper that sequences `C-z`, condition-based waiting, and `bg`
+- `tests/tmux-config-regression.bash` — static and runtime validation of the tmux binding
+- `tests/tmux-background-job-regression.bash` — focused regression coverage for helper timing behavior
 
-This keeps the change aligned with the user's request for global bare `C-z` behavior while staying explicit about the contexts we are intentionally not tailoring.
+## Supported context
 
-## Placement
-
-Keep the binding inside the existing `bind-key -n` block in `files/.tmux.conf`, next to the other non-prefix pane keybindings, so the configuration stays organized alongside other direct pane input mappings.
-
-Add the helper implementation in `scripts/tmux-background-job.sh`.
+- Guaranteed: normal interactive pane usage where tmux dispatches keys through the root table
+- Accepted but undefined: copy-mode, command-prompt, and other non-root-table contexts; no table-specific handling is added
 
 ## Validation
 
-Extend `tests/tmux-config-regression.bash` to extract the exact `bind-key -n C-z` line from `files/.tmux.conf`, assert that exactly one such line exists, and assert that the line delegates through `tmux-background-job.sh` with both `#{pane_id}` and `#{pane_current_command}`.
+`tests/tmux-config-regression.bash` verifies that:
 
-Add a helper-script regression test that verifies the helper sends `C-z`, polls `#{pane_current_command}` until it changes away from the captured foreground command, then sends `bg Enter`. Also verify that the helper still falls back to sending `bg` after the timeout budget expires.
+- exactly one bare `bind-key -n C-z` line exists
+- the binding delegates through `tmux-background-job.sh`
+- the binding passes both `#{pane_id}` and `#{pane_current_command}`
+- an isolated tmux server registers the binding in `root`
+- the helper binding does not appear in `prefix`, `copy-mode`, or `copy-mode-vi`
 
-Add a runtime validation step that uses an isolated tmux server started with `-f /dev/null` and a dedicated socket name. Feed the exact extracted `bind-key -n C-z` line from `files/.tmux.conf` into that isolated server, then verify:
+`tests/tmux-background-job-regression.bash` verifies that the helper:
 
-1. `tmux list-keys -T root` shows the expected `C-z` binding.
-2. `tmux list-keys -T prefix`, `tmux list-keys -T copy-mode`, and `tmux list-keys -T copy-mode-vi` do not show the helper binding outside `root`.
+- sends `C-z` first
+- polls until shell handoff and a visible `Stopped ... <command>` marker are both present
+- sends `bg Enter` only after those conditions are met
+- falls back to sending `bg` after the timeout budget if the stopped marker never appears
 
-This runtime check validates tmux parsing and table registration without loading the repository's full `.tmux.conf`, plugin bootstrap, or hooks, so it stays deterministic and does not interfere with the user's live tmux environment.
+## Manual verification
 
-Run the existing tmux regression test after the change.
+In a tmux shell pane:
 
-Perform a manual tmux smoke test in an interactive shell pane with a simple foreground job such as `sleep 100`. Press bare `C-z`, then run `jobs` and confirm the job appears resumed in the background rather than remaining stopped.
+```bash
+tmux source-file "$HOME/repo/dotfiles/files/.tmux.conf"
+sleep 100
+```
+
+Then press bare `Ctrl-Z` and run:
+
+```bash
+jobs
+```
+
+Expected: the job appears resumed in the background rather than remaining stopped.
 
 ## Trade-offs
 
-- In shell panes with job control, this should suspend the foreground job, wait for the shell to regain control, and then resume it with `bg`, matching the requested workflow.
-- If `C-z` does not create a new stopped job, the subsequent `bg` may be delivered as plain input, may produce shell feedback such as `bg: no current job`, or may resume an older stopped job already known to the shell. These outcomes are acceptable for this design; the binding does not attempt to detect or suppress them.
-- In non-shell programs inside tmux, tmux will still send `C-z` and then `bg`, which may not be meaningful. This is an accepted consequence of the requested global binding.
-- The design intentionally avoids shell detection and uses a small helper script with condition-based waiting instead of a blind fixed delay.
+- This intentionally remains a global bare `C-z` tmux binding.
+- If `C-z` does not create a fresh stopped job, the later `bg` may still become plain input, print shell feedback such as `bg: no current job`, or resume an older stopped job.
+- The implementation avoids shell detection and uses condition-based waiting instead of a blind fixed delay.
 
 ## Out of scope
 
-- Detecting whether the active pane is running a shell.
-- Falling back to prefix-based behavior.
-- Reusing the existing tmux `bg` session/window-moving workflow bound on `Prefix + b`.
+- Detecting whether the active pane is running a shell
+- Falling back to a prefix-only binding
+- Reusing the separate tmux `bg` session/window-moving workflow on `Prefix + b`
