@@ -45,10 +45,14 @@ if [[ "${#c_z_binding_lines[@]}" -ne 1 ]]; then
     fail "tmux.conf should define exactly one bare C-z binding (found ${#c_z_binding_lines[@]})"
 fi
 c_z_binding_line="${c_z_binding_lines[0]}"
-assert_contains "$c_z_binding_line" "send-keys C-z" \
-    "bare C-z binding must send a literal Ctrl-z to the pane first"
-assert_contains "$c_z_binding_line" 'send-keys "bg" Enter' \
-    "bare C-z binding must background the most recent job through bg"
+assert_contains "$c_z_binding_line" "run-shell" \
+    "bare C-z binding must delegate backgrounding through a helper script"
+assert_contains "$c_z_binding_line" "tmux-background-job.sh" \
+    "bare C-z binding must call the tmux background-job helper"
+assert_contains "$c_z_binding_line" "#{pane_id}" \
+    "bare C-z binding must pass the active pane id to the background-job helper"
+assert_contains "$c_z_binding_line" "#{pane_current_command}" \
+    "bare C-z binding must pass the pre-suspend foreground command to the background-job helper"
 
 tmux_socket="$repo_root/.tmux-c-z-test.sock"
 rm -f "$tmux_socket"
@@ -79,18 +83,18 @@ fi
 root_keys="$("${tmux_cmd[@]}" list-keys -T root)"
 assert_contains "$root_keys" "C-z" \
     "root table should register the bare C-z background binding"
-assert_contains "$root_keys" "send-keys bg Enter" \
-    "root table should canonicalize the background binding to send-keys bg Enter"
+assert_contains "$root_keys" "tmux-background-job.sh" \
+    "root table should register the background-job helper binding"
 
 prefix_keys="$("${tmux_cmd[@]}" list-keys -T prefix)"
 copy_mode_keys="$("${tmux_cmd[@]}" list-keys -T copy-mode)"
 copy_mode_vi_keys="$("${tmux_cmd[@]}" list-keys -T copy-mode-vi)"
 
-assert_not_contains "$prefix_keys" "send-keys bg Enter" \
+assert_not_contains "$prefix_keys" "tmux-background-job.sh" \
     "prefix table must not register the bare C-z background binding"
-assert_not_contains "$copy_mode_keys" "send-keys bg Enter" \
+assert_not_contains "$copy_mode_keys" "tmux-background-job.sh" \
     "copy-mode table must not register the bare C-z background binding"
-assert_not_contains "$copy_mode_vi_keys" "send-keys bg Enter" \
+assert_not_contains "$copy_mode_vi_keys" "tmux-background-job.sh" \
     "copy-mode-vi table must not register the bare C-z background binding"
 
 echo "All tmux config regression tests passed"
