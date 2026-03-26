@@ -14,15 +14,17 @@ case "$TERM_NAME" in
         tmux unbind-key -n C-Right 2>/dev/null || true
         tmux bind-key -n M-Left previous-window
         tmux bind-key -n M-Right next-window
-        tmux display-popup -c "$CLIENT" -w 36 -h 5 -T " 按鍵模式 " \
-            "printf '\n  PuTTY 模式\n  Alt+← / Alt+→  切換 window\n'; sleep 3"
+        # Popup is a best-effort hint; don't let attach fail if it closes early.
+        tmux display-popup -E -c "$CLIENT" -w 36 -h 5 -T " 按鍵模式 " \
+            "printf '\n  PuTTY 模式\n  Alt+← / Alt+→  切換 window\n'; sleep 3" >/dev/null 2>&1 || true
         ;;
     linux)
         tmux unbind-key -n M-Left 2>/dev/null || true
         tmux unbind-key -n M-Right 2>/dev/null || true
         tmux bind-key -n C-Left previous-window
         tmux bind-key -n C-Right next-window
-        tmux display-popup -c "$CLIENT" -w 40 -h 5 -T " 按鍵模式 " \
-            "printf '\n  Linux console 模式\n  Ctrl+← / Ctrl+→  切換 window\n'; sleep 3"
+        # Popup is a best-effort hint; don't let attach fail if it closes early.
+        tmux display-popup -E -c "$CLIENT" -w 40 -h 5 -T " 按鍵模式 " \
+            "printf '\n  Linux console 模式\n  Ctrl+← / Ctrl+→  切換 window\n'; sleep 3" >/dev/null 2>&1 || true
         ;;
 esac
