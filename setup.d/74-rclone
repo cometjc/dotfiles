@@ -9,6 +9,7 @@ else
     exit 1
 fi
 
+# Install / update rclone via official install script
 version=$(rclone --version 2>/dev/null | head -n 1 || echo "")
 current_version=$(curl -fsS https://downloads.rclone.org/version.txt)
 
@@ -19,6 +20,7 @@ else
     curl https://rclone.org/install.sh | sudo bash
 fi
 
+# Set user_allow_other in /etc/fuse.conf
 if grep -q '^user_allow_other' /etc/fuse.conf; then
     pass "user_allow_other is already set in /etc/fuse.conf"
 else
@@ -26,14 +28,39 @@ else
     echo "user_allow_other" | sudo tee -a /etc/fuse.conf
 fi
 
-# run `rclone rc --rc-addr :5575 vfs/refresh recursive=true` every 6 hours
-refresh_cmd="rclone rc --rc-addr :5575 vfs/refresh recursive=true"
-if crontab -l | grep -q "$refresh_cmd"; then
-    pass "rclone refresh cron job is already set"
+# Remove old vfs/refresh cron job if it exists
+if crontab -l 2>/dev/null | grep -q 'vfs/refresh'; then
+    change "Remove old rclone vfs/refresh cron job"
+    crontab -l 2>/dev/null | grep -v 'vfs/refresh' | crontab - || true
 else
-    change "add rclone refresh cron job"
-    (
-        crontab -l 2>/dev/null
-        echo "0 */6 * * * $refresh_cmd"
-    ) | crontab -
+    pass "No stale vfs/refresh cron job found"
+fi
+
+# Reload systemd user daemon (service file deployed via dotfiles symlink)
+systemctl --user daemon-reload
+
+# Auto-detect drive remotes and enable mounts
+mapfile -t drive_remotes < <(rclone listremotes --long 2>/dev/null | awk '$2 == "drive" { sub(/:$/, "", $1); print $1 }')
+
+if [[ ${#drive_remotes[@]} -eq 0 ]]; then
+    warn "No rclone drive remotes found. Run 'rclone config' to set up remotes, then:"
+    warn "  systemctl --user enable --now rclone@<remote-name>"
+else
+    for remote in "${drive_remotes[@]}"; do
+        local_mount="/mnt/$remote"
+        if [[ ! -d "$local_mount" ]]; then
+            change "Create mount point $local_mount"
+            sudo mkdir -p "$local_mount"
+            sudo chown "$USER":"$(id -gn)" "$local_mount"
+        elif [[ ! -O "$local_mount" ]]; then
+            change "Fix ownership of $local_mount"
+            sudo chown "$USER":"$(id -gn)" "$local_mount"
+        fi
+        if systemctl --user is-enabled "rclone@$remote" &>/dev/null; then
+            pass "rclone@$remote already enabled"
+        else
+            change "Enable and start rclone@$remote"
+            systemctl --user enable --now "rclone@$remote"
+        fi
+    done
 fi
