@@ -397,6 +397,246 @@ EOF
     grep -Fx "brew install kubectx" "$log_file" >/dev/null || fail "56-brew-apps should install kubectx individually"
 }
 
+test_78_glow_installs_with_brew_on_mac() {
+    local temp_dir
+    temp_dir="$(mktemp -d)"
+    trap 'rm -rf "$temp_dir"' RETURN
+
+    local fake_bin="$temp_dir/bin"
+    local log_file="$temp_dir/brew.log"
+    mkdir -p "$fake_bin"
+
+    cat >"$fake_bin/brew" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+printf 'brew %s\n' "$*" >>"${TEST_GLOW_BREW_LOG:?}"
+exit 0
+EOF
+    chmod +x "$fake_bin/brew"
+
+    (
+        cd "$repo_root/setup.d"
+        PATH="$fake_bin:/usr/bin:/bin" \
+            GLOW_BIN_NAME="glow-under-test" \
+            platform="mac" \
+            TEST_GLOW_BREW_LOG="$log_file" \
+            ./78-glow -f >/tmp/test-78-glow-mac.log 2>&1
+    ) || {
+        cat /tmp/test-78-glow-mac.log >&2
+        fail "78-glow should install glow with brew on macOS"
+    }
+
+    grep -Fx "brew install glow" "$log_file" >/dev/null \
+        || fail "78-glow should run brew install glow on macOS"
+}
+
+test_78_glow_configures_charm_apt_repo_on_debian() {
+    local temp_dir
+    temp_dir="$(mktemp -d)"
+    trap 'rm -rf "$temp_dir"' RETURN
+
+    local fake_bin="$temp_dir/bin"
+    local log_file="$temp_dir/apt.log"
+    local apt_key_file="$temp_dir/etc/apt/keyrings/charm.gpg"
+    local apt_source_file="$temp_dir/etc/apt/sources.list.d/charm.list"
+    mkdir -p "$fake_bin"
+
+    cat >"$fake_bin/sudo" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+exec "$@"
+EOF
+    chmod +x "$fake_bin/sudo"
+
+    cat >"$fake_bin/curl" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+printf 'fake charm key\n'
+EOF
+    chmod +x "$fake_bin/curl"
+
+    cat >"$fake_bin/gpg" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+out=""
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      -o)
+        out="$2"
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+done
+cat >"$out"
+EOF
+    chmod +x "$fake_bin/gpg"
+
+    cat >"$fake_bin/apt-get" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+printf 'apt-get %s\n' "$*" >>"${TEST_GLOW_APT_LOG:?}"
+exit 0
+EOF
+    chmod +x "$fake_bin/apt-get"
+
+    (
+        cd "$repo_root/setup.d"
+        PATH="$fake_bin:/usr/bin:/bin" \
+            GLOW_BIN_NAME="glow-under-test" \
+            platform="linux" \
+            GLOW_LINUX_FAMILY="apt" \
+            GLOW_APT_KEY_FILE="$apt_key_file" \
+            GLOW_APT_SOURCE_FILE="$apt_source_file" \
+            TEST_GLOW_APT_LOG="$log_file" \
+            ./78-glow -f >/tmp/test-78-glow-apt.log 2>&1
+    ) || {
+        cat /tmp/test-78-glow-apt.log >&2
+        fail "78-glow should configure the Charm apt repo on Debian/Ubuntu"
+    }
+
+    [[ -f "$apt_key_file" ]] || fail "78-glow should create the Charm apt keyring"
+    [[ -f "$apt_source_file" ]] || fail "78-glow should create the Charm apt source list"
+    grep -F "signed-by=$apt_key_file" "$apt_source_file" >/dev/null \
+        || fail "78-glow should point apt at the Charm keyring"
+    grep -Fx "apt-get update" "$log_file" >/dev/null \
+        || fail "78-glow should refresh apt after adding the Charm repo"
+    grep -Fx "apt-get install -y glow" "$log_file" >/dev/null \
+        || fail "78-glow should install glow with apt-get on Debian/Ubuntu"
+}
+
+test_78_glow_configures_charm_yum_repo_on_fedora() {
+    local temp_dir
+    temp_dir="$(mktemp -d)"
+    trap 'rm -rf "$temp_dir"' RETURN
+
+    local fake_bin="$temp_dir/bin"
+    local log_file="$temp_dir/yum.log"
+    local yum_repo_file="$temp_dir/etc/yum.repos.d/charm.repo"
+    mkdir -p "$fake_bin"
+
+    cat >"$fake_bin/sudo" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+exec "$@"
+EOF
+    chmod +x "$fake_bin/sudo"
+
+    cat >"$fake_bin/yum" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+printf 'yum %s\n' "$*" >>"${TEST_GLOW_YUM_LOG:?}"
+exit 0
+EOF
+    chmod +x "$fake_bin/yum"
+
+    (
+        cd "$repo_root/setup.d"
+        PATH="$fake_bin:/usr/bin:/bin" \
+            GLOW_BIN_NAME="glow-under-test" \
+            platform="linux" \
+            GLOW_LINUX_FAMILY="yum" \
+            GLOW_YUM_REPO_FILE="$yum_repo_file" \
+            TEST_GLOW_YUM_LOG="$log_file" \
+            ./78-glow -f >/tmp/test-78-glow-yum.log 2>&1
+    ) || {
+        cat /tmp/test-78-glow-yum.log >&2
+        fail "78-glow should configure the Charm yum repo on Fedora/RHEL"
+    }
+
+    [[ -f "$yum_repo_file" ]] || fail "78-glow should create the Charm yum repo file"
+    grep -F "baseurl=https://repo.charm.sh/yum/" "$yum_repo_file" >/dev/null \
+        || fail "78-glow should write the Charm yum baseurl"
+    grep -Fx "yum install -y glow" "$log_file" >/dev/null \
+        || fail "78-glow should install glow with yum on Fedora/RHEL"
+}
+
+test_78_glow_skips_all_install_flows_when_glow_exists() {
+    local temp_dir
+    temp_dir="$(mktemp -d)"
+    trap 'rm -rf "$temp_dir"' RETURN
+
+    local fake_bin="$temp_dir/bin"
+    local log_file="$temp_dir/skip.log"
+    local apt_key_file="$temp_dir/etc/apt/keyrings/charm.gpg"
+    local apt_source_file="$temp_dir/etc/apt/sources.list.d/charm.list"
+    mkdir -p "$fake_bin"
+
+    cat >"$fake_bin/glow-under-test" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$fake_bin/glow-under-test"
+
+    cat >"$fake_bin/sudo" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+exec "$@"
+EOF
+    chmod +x "$fake_bin/sudo"
+
+    cat >"$fake_bin/brew" <<'EOF'
+#!/bin/bash
+printf 'brew %s\n' "$*" >>"${TEST_GLOW_SKIP_LOG:?}"
+exit 1
+EOF
+    chmod +x "$fake_bin/brew"
+
+    cat >"$fake_bin/apt-get" <<'EOF'
+#!/bin/bash
+printf 'apt-get %s\n' "$*" >>"${TEST_GLOW_SKIP_LOG:?}"
+exit 1
+EOF
+    chmod +x "$fake_bin/apt-get"
+
+    cat >"$fake_bin/yum" <<'EOF'
+#!/bin/bash
+printf 'yum %s\n' "$*" >>"${TEST_GLOW_SKIP_LOG:?}"
+exit 1
+EOF
+    chmod +x "$fake_bin/yum"
+
+    cat >"$fake_bin/curl" <<'EOF'
+#!/bin/bash
+printf 'curl %s\n' "$*" >>"${TEST_GLOW_SKIP_LOG:?}"
+exit 1
+EOF
+    chmod +x "$fake_bin/curl"
+
+    cat >"$fake_bin/gpg" <<'EOF'
+#!/bin/bash
+printf 'gpg %s\n' "$*" >>"${TEST_GLOW_SKIP_LOG:?}"
+exit 1
+EOF
+    chmod +x "$fake_bin/gpg"
+
+    cat >"$fake_bin/tee" <<'EOF'
+#!/bin/bash
+printf 'tee %s\n' "$*" >>"${TEST_GLOW_SKIP_LOG:?}"
+exit 1
+EOF
+    chmod +x "$fake_bin/tee"
+
+    (
+        cd "$repo_root/setup.d"
+        PATH="$fake_bin:/usr/bin:/bin" \
+            GLOW_BIN_NAME="glow-under-test" \
+            platform="linux" \
+            GLOW_LINUX_FAMILY="apt" \
+            GLOW_APT_KEY_FILE="$apt_key_file" \
+            GLOW_APT_SOURCE_FILE="$apt_source_file" \
+            TEST_GLOW_SKIP_LOG="$log_file" \
+            ./78-glow -f >/tmp/test-78-glow-skip.log 2>&1
+    ) || {
+        cat /tmp/test-78-glow-skip.log >&2
+        fail "78-glow should exit early when glow is already installed"
+    }
+
+    [[ ! -e "$log_file" ]] || fail "78-glow should not run install commands when glow already exists"
+}
+
 test_70_powerline_repairs_root_owned_uv_cache() {
     local temp_dir
     temp_dir="$(mktemp -d)"
@@ -795,6 +1035,10 @@ test_50_mise_repairs_root_owned_cache_directory
 test_51_node_apps_repairs_root_owned_npm_directory
 test_52_go_apps_repairs_root_owned_cache_directory
 test_56_brew_apps_installs_formulae_sequentially
+test_78_glow_installs_with_brew_on_mac
+test_78_glow_configures_charm_apt_repo_on_debian
+test_78_glow_configures_charm_yum_repo_on_fedora
+test_78_glow_skips_all_install_flows_when_glow_exists
 test_70_powerline_repairs_root_owned_uv_cache
 test_70_powerline_repairs_missing_uv_tool_python_shim
 test_53_python_apps_is_executable

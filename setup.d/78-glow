@@ -1,0 +1,122 @@
+#!/bin/bash
+# vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=8 :
+common_lib="$(dirname "$(readlink -f "$0")")/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=common-lib
+    . "$common_lib"
+else
+    echo "Cannot find common-lib."
+    exit 1
+fi
+
+# Early Skip Flows
+glow_bin_name="${GLOW_BIN_NAME:-glow}"
+if command -v "$glow_bin_name" >/dev/null 2>&1; then
+    pass "glow is already installed"
+    exit 0
+fi
+
+detect_glow_linux_family() {
+    if [[ -n "${GLOW_LINUX_FAMILY:-}" ]]; then
+        printf '%s\n' "$GLOW_LINUX_FAMILY"
+        return 0
+    fi
+
+    if [[ -f /etc/os-release ]]; then
+        local os_id=""
+        local os_like=""
+        # shellcheck source=/etc/os-release
+        . /etc/os-release
+        os_id="${ID:-}"
+        os_like="${ID_LIKE:-}"
+        case " ${os_id,,} ${os_like,,} " in
+            *" debian "* | *" ubuntu "*)
+                printf '%s\n' apt
+                return 0
+                ;;
+            *" fedora "* | *" rhel "* | *" centos "* | *" rocky "* | *" almalinux "*)
+                printf '%s\n' yum
+                return 0
+                ;;
+        esac
+    fi
+
+    case "${DISTRIB_ID:-}" in
+        Ubuntu | Debian | LinuxMint)
+            printf '%s\n' apt
+            return 0
+            ;;
+    esac
+
+    if command -v apt-get >/dev/null 2>&1; then
+        printf '%s\n' apt
+        return 0
+    fi
+    if command -v yum >/dev/null 2>&1; then
+        printf '%s\n' yum
+        return 0
+    fi
+
+    printf '%s\n' unknown
+}
+
+install_glow_with_apt() {
+    local apt_key_file="${GLOW_APT_KEY_FILE:-/etc/apt/keyrings/charm.gpg}"
+    local apt_source_file="${GLOW_APT_SOURCE_FILE:-/etc/apt/sources.list.d/charm.list}"
+
+    sudo install -m 0755 -d "$(dirname "$apt_key_file")"
+    if [[ ! -f "$apt_key_file" ]]; then
+        curl -fsSL https://repo.charm.sh/apt/gpg.key | sudo gpg --dearmor -o "$apt_key_file"
+    fi
+
+    sudo install -m 0755 -d "$(dirname "$apt_source_file")"
+    if [[ ! -f "$apt_source_file" ]]; then
+        echo "deb [signed-by=$apt_key_file] https://repo.charm.sh/apt/ * *" \
+            | sudo tee "$apt_source_file" >/dev/null
+    fi
+
+    sudo apt-get update
+    sudo apt-get install -y glow
+}
+
+install_glow_with_yum() {
+    local yum_repo_file="${GLOW_YUM_REPO_FILE:-/etc/yum.repos.d/charm.repo}"
+
+    sudo install -m 0755 -d "$(dirname "$yum_repo_file")"
+    if [[ ! -f "$yum_repo_file" ]]; then
+        cat <<EOF | sudo tee "$yum_repo_file" >/dev/null
+[charm]
+name=Charm
+baseurl=https://repo.charm.sh/yum/
+enabled=1
+gpgcheck=1
+gpgkey=https://repo.charm.sh/yum/gpg.key
+EOF
+    fi
+
+    sudo yum install -y glow
+}
+
+case $platform in
+    'mac')
+        brew install glow
+        ;;
+    'linux')
+        case "$(detect_glow_linux_family)" in
+            apt)
+                install_glow_with_apt
+                ;;
+            yum)
+                install_glow_with_yum
+                ;;
+            *)
+                fail "Unsupported Linux distribution for glow setup"
+                exit 1
+                ;;
+        esac
+        ;;
+    *)
+        fail "Unsupported platform for glow setup: $platform"
+        exit 1
+        ;;
+esac
