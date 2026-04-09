@@ -5,8 +5,14 @@ if [[ -f "$common_lib" ]]; then
     # shellcheck source=common-lib
     . "$common_lib"
 else
-    echo "Cannot find common-lib."
+    echo "[FAIL] Cannot find common-lib."
     exit 1
+fi
+
+# Early Skip Flows
+if ! command -v mise &>/dev/null && [[ ! -x "$HOME/.local/bin/mise" ]]; then
+    pass "mise not found, skipping go apps installation"
+    exit 0
 fi
 
 ensure_user_owned_dir "$HOME/.cache/mise"

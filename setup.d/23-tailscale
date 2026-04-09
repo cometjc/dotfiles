@@ -5,8 +5,20 @@ if [[ -f "$common_lib" ]]; then
     # shellcheck source=common-lib
     . "$common_lib"
 else
-    echo "Cannot find common-lib."
+    echo "[FAIL] Cannot find common-lib."
     exit 1
+fi
+
+# Early Skip Flows
+if [[ "${platform:-}" != linux ]]; then
+    pass "Skipping tailscale setup on non-Linux platform"
+    export skipped=1
+    exit
+fi
+if command -v tailscale &>/dev/null \
+    && [[ -f /etc/networkd-dispatcher/routable.d/50-tailscale ]]; then
+    pass "tailscale is already installed and configured"
+    exit 0
 fi
 
 # Ensure platform is set (from common-lib)
@@ -31,7 +43,7 @@ setup_tailscale() {
     fi
     # Check if the script works
     if ! sudo /etc/networkd-dispatcher/routable.d/50-tailscale; then
-        echo 'An error occurred.'
+        fail 'An error occurred.'
         false
     fi
 }

@@ -5,8 +5,16 @@ if [[ -f "$common_lib" ]]; then
     # shellcheck source=common-lib
     . "$common_lib"
 else
-    echo "Cannot find common-lib."
+    echo "[FAIL] Cannot find common-lib."
     exit 1
+fi
+
+# Early Skip Flows
+if locale -a 2>/dev/null | grep -q 'zh_TW.utf8' \
+    && locale -a 2>/dev/null | grep -q 'zh_CN.utf8' \
+    && locale -a 2>/dev/null | grep -q 'en_US.utf8'; then
+    pass "required locales already generated"
+    exit 0
 fi
 
 sudo locale-gen --keep-existing zh_TW zh_TW.UTF-8 zh_CN.UTF-8 en_US.UTF-8

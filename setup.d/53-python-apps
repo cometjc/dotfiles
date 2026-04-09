@@ -5,9 +5,12 @@ if [[ -f "$common_lib" ]]; then
     # shellcheck source=common-lib
     . "$common_lib"
 else
-    echo "Cannot find common-lib."
+    echo "[FAIL] Cannot find common-lib."
     exit 1
 fi
+
+# Early Skip Flows
+# uv and tools are always upgraded when present; no full early skip
 
 # pipx
 # pipx is installed by OS
@@ -76,4 +79,26 @@ for tool in "${tools[@]}"; do
         uv tool install "$tool"
     fi
 done
-uv tool upgrade --all
+# Upgrade managed tools; fail loudly if a managed tool breaks
+for tool in "${tools[@]}"; do
+    tool_name="$(tool_name_for_uv_spec "$tool")"
+    if array_contains current_tools "$tool_name"; then
+        uv tool upgrade "$tool_name"
+    fi
+done
+
+# Upgrade unmanaged (externally installed) tools; clean up broken entries
+for installed_tool in "${current_tools[@]}"; do
+    is_managed=0
+    for tool in "${tools[@]}"; do
+        [[ "$(tool_name_for_uv_spec "$tool")" == "$installed_tool" ]] && {
+            is_managed=1
+            break
+        }
+    done
+    ((is_managed)) && continue
+    if ! uv tool upgrade "$installed_tool"; then
+        change "Removing unmanaged broken uv tool entry: $installed_tool"
+        uv tool uninstall "$installed_tool" || true
+    fi
+done

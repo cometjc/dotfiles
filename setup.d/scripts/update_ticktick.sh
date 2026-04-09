@@ -19,44 +19,44 @@ log_message() {
 
 # --- 函數：維護腳本在 /usr/local/bin 和 /etc/crontab 中的存在 ---
 maintain_self() {
-    echo "--- 正在維護腳本安裝狀態 ---"
+    log_message "--- 正在維護腳本安裝狀態 ---"
 
     # 檢查是否以 root 權限執行
     if [[ $EUID -ne 0 ]]; then
-        echo "錯誤：此腳本需要 root 權限才能複製檔案和修改 /etc/crontab。請使用 sudo 執行。"
+        log_message "錯誤：此腳本需要 root 權限才能複製檔案和修改 /etc/crontab。請使用 sudo 執行。"
         exit 1
     fi
 
     # 1. 複製腳本本身到 /usr/local/bin/ 並賦予執行權限
     # $0 代表目前正在執行的腳本的路徑
     if [ ! -f "$UPDATER_SCRIPT_PATH" ] || ! cmp -s "$0" "$UPDATER_SCRIPT_PATH"; then
-        echo "複製或更新 $UPDATER_SCRIPT_NAME 到 $UPDATER_SCRIPT_PATH..."
+        log_message "複製或更新 $UPDATER_SCRIPT_NAME 到 $UPDATER_SCRIPT_PATH..."
         cp "$0" "$UPDATER_SCRIPT_PATH"
         chmod +x "$UPDATER_SCRIPT_PATH"
-        echo "複製完成並設定執行權限。"
+        log_message "複製完成並設定執行權限。"
     else
-        echo "腳本已存在於 $UPDATER_SCRIPT_PATH 且內容一致，無需複製。"
+        log_message "腳本已存在於 $UPDATER_SCRIPT_PATH 且內容一致，無需複製。"
     fi
 
     # 2. 維護 /etc/crontab 中的條目
-    echo "正在維護 /etc/crontab 中的條目..."
+    log_message "正在維護 /etc/crontab 中的條目..."
 
     # 檢查 cron job 是否已存在且正確
     # 先刪除所有包含此腳本路徑的行，然後再添加正確的行，確保唯一性和正確性
     if grep -q "$UPDATER_SCRIPT_PATH" /etc/crontab; then
-        echo "發現舊的 cron job 條目，正在更新..."
+        log_message "發現舊的 cron job 條目，正在更新..."
         # 使用 sed 刪除所有包含腳本路徑的行
         sed -i "\#$UPDATER_SCRIPT_PATH#d" /etc/crontab
     else
-        echo "未發現 cron job 條目，將添加新的。"
+        log_message "未發現 cron job 條目，將添加新的。"
     fi
 
     # 將新的 cron job 加入到 /etc/crontab
     # 使用 tee -a 寫入，並將輸出導向 /dev/null
     echo "$CRON_JOB_COMMAND" | tee -a /etc/crontab >/dev/null
-    echo "Cron job 已成功添加/更新。將每日凌晨 3 點由 root 用戶執行。"
+    log_message "Cron job 已成功添加/更新。將每日凌晨 3 點由 root 用戶執行。"
 
-    echo "--- 腳本安裝狀態維護完成 ---"
+    log_message "--- 腳本安裝狀態維護完成 ---"
 }
 
 # --- 函數：執行 TickTick 更新邏輯 ---
@@ -129,7 +129,7 @@ perform_update() {
 }
 
 # --- 主執行邏輯 ---
-echo "TickTick 自動更新器啟動..."
+log_message "TickTick 自動更新器啟動..."
 
 # 每次執行都先維護自身在系統中的狀態
 maintain_self
@@ -137,5 +137,5 @@ maintain_self
 # 然後執行實際的更新邏輯
 perform_update
 
-echo "TickTick 自動更新器執行結束。"
+log_message "TickTick 自動更新器執行結束。"
 exit 0

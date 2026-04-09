@@ -5,9 +5,12 @@ if [[ -f "$common_lib" ]]; then
     # shellcheck source=common-lib
     . "$common_lib"
 else
-    echo "Cannot find common-lib."
+    echo "[FAIL] Cannot find common-lib."
     exit 1
 fi
+
+# Early Skip Flows
+# mise always upgrades on each run; no early skip
 
 if ! command -v mise >&/dev/null; then
     curl https://mise.run | sh

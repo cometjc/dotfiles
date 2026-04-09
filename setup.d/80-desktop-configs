@@ -5,8 +5,15 @@ if [[ -f "$common_lib" ]]; then
     # shellcheck source=common-lib
     . "$common_lib"
 else
-    echo "Cannot find common-lib."
+    echo "[FAIL] Cannot find common-lib."
     exit 1
+fi
+
+# Early Skip Flows
+if [[ "${platform:-}" != linux ]]; then
+    pass "Skipping desktop configs on non-Linux platform"
+    export skipped=1
+    exit
 fi
 
 # Ensure platform is set (from common-lib)
@@ -31,7 +38,7 @@ if [[ "$platform" == linux ]]; then
     patch_script="$(dirname "$(realpath "$0")")/scripts/apply-appswitcher-patch.sh"
     if [[ -f "$patch_script" ]]; then
         chmod +x "$patch_script"
-        $patch_script || change "appswitcher patch script failed (may not be needed)"
+        $patch_script || info "appswitcher patch script failed (may not be needed)"
     fi
 
     # Set up post-install hook for cinnamon-common

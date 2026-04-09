@@ -5,9 +5,12 @@ if [[ -f "$common_lib" ]]; then
     # shellcheck source=common-lib
     . "$common_lib"
 else
-    echo "Cannot find common-lib."
+    echo "[FAIL] Cannot find common-lib."
     exit 1
 fi
+
+# Early Skip Flows
+# rclone version check is done inline; no full early skip needed
 
 # Install / update rclone via official install script
 version=$(rclone --version 2>/dev/null | head -n 1 || echo "")

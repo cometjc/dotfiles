@@ -5,8 +5,14 @@ if [[ -f "$common_lib" ]]; then
     # shellcheck source=common-lib
     . "$common_lib"
 else
-    echo "Cannot find common-lib."
+    echo "[FAIL] Cannot find common-lib."
     exit 1
+fi
+
+# Early Skip Flows
+if command -v direnv >/dev/null 2>&1; then
+    pass "direnv is already installed"
+    exit 0
 fi
 
 # Ensure platform is set (from common-lib)

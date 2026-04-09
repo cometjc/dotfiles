@@ -5,8 +5,15 @@ if [[ -f "$common_lib" ]]; then
     # shellcheck source=common-lib
     . "$common_lib"
 else
-    echo "Cannot find common-lib."
+    echo "[FAIL] Cannot find common-lib."
     exit 1
+fi
+
+# Early Skip Flows
+if [[ "${platform:-}" != linux ]]; then
+    pass "Skipping shfmt install on non-Linux platform"
+    export skipped=1
+    exit
 fi
 
 #######################

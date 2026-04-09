@@ -5,8 +5,14 @@ if [[ -f "$common_lib" ]]; then
     # shellcheck source=common-lib
     . "$common_lib"
 else
-    echo "Cannot find common-lib."
+    echo "[FAIL] Cannot find common-lib."
     exit 1
+fi
+
+# Early Skip Flows
+if command -v powerline >/dev/null 2>&1; then
+    pass "powerline is already installed"
+    exit 0
 fi
 
 # Ensure uv is in PATH
@@ -59,7 +65,7 @@ repair_powerline_uv_tool() {
 
 repair_powerline_uv_tool
 if ! command -v uv &>/dev/null; then
-    change "uv not found, skipping powerline installation"
+    info "uv not found, skipping powerline installation"
 else
     ensure_user_owned_dir "$HOME/.cache/uv"
     uv tool install --with powerline-gitstatus powerline-status -p 3.8

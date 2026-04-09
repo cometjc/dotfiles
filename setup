@@ -7,6 +7,15 @@ fi
 cd "$(dirname "$0")" || exit
 here=$(pwd)
 steps_dir="${SETUP_STEPS_DIR:-$here/setup.d}"
+
+# Source common-lib early so skip_script_if_executed receives $@ (including -f)
+common_lib="$here/setup.d/common-lib"
+if [[ -f "$common_lib" ]]; then
+    # shellcheck source=setup.d/common-lib
+    . "$common_lib"
+fi
+ensure_pkg attr
+
 force_setup=0
 dry_run=0
 only_step=""
@@ -73,15 +82,6 @@ if [[ -n "$only_step" && -n "$from_step" ]]; then
     echo "--only and --from cannot be used together" >&2
     exit 1
 fi
-
-# ensure attr package is installed for getfattr/setfattr commands
-common_lib="$here/setup.d/common-lib"
-if [[ -f "$common_lib" ]]; then
-    # shellcheck source=/dev/null
-    . "$common_lib"
-fi
-
-ensure_pkg attr
 
 discover_setup_steps() {
     find "$steps_dir" -maxdepth 1 -type f -regextype posix-extended -regex '.*/[0-9][0-9]-.*' -printf '%f\n' | sort

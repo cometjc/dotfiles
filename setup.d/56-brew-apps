@@ -5,9 +5,13 @@ if [[ -f "$common_lib" ]]; then
     # shellcheck source=common-lib
     . "$common_lib"
 else
-    echo "Cannot find common-lib."
+    echo "[FAIL] Cannot find common-lib."
     exit 1
 fi
+
+# Early Skip Flows
+# brew packages are always updated on each run via `brew install` (idempotent)
+# No full early skip; rely on xattr-based skip from common-lib
 brew_bin="${BREW_BIN:-/home/linuxbrew/.linuxbrew/bin/brew}"
 command -v brew >/dev/null 2>&1 || NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 eval "$("$brew_bin" shellenv)"

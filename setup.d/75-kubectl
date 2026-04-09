@@ -5,8 +5,15 @@ if [[ -f "$common_lib" ]]; then
     # shellcheck source=common-lib
     . "$common_lib"
 else
-    echo "Cannot find common-lib."
+    echo "[FAIL] Cannot find common-lib."
     exit 1
+fi
+
+# Early Skip Flows
+if command -v kubectl >/dev/null 2>&1 \
+    && kubectl krew version >/dev/null 2>&1; then
+    pass "kubectl and krew already installed"
+    exit 0
 fi
 
 if [[ ! -f /etc/apt/keyrings/kubernetes-apt-keyring.gpg ]]; then

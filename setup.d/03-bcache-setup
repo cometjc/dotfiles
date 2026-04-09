@@ -5,11 +5,11 @@ if [[ -f "$common_lib" ]]; then
     # shellcheck source=common-lib
     . "$common_lib"
 else
-    echo "Cannot find common-lib."
+    echo "[FAIL] Cannot find common-lib."
     exit 1
 fi
 
-# Skip if bcache is not available
+# Early Skip Flows
 if [[ ! -d /sys/fs/bcache ]] && ! find /sys/block -maxdepth 1 -name 'bcache*' -type l | grep -q .; then
     pass "bcache not available, skipping"
     export skipped=1

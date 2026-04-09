@@ -5,19 +5,19 @@ if [[ -f "$common_lib" ]]; then
     # shellcheck source=common-lib
     . "$common_lib"
 else
-    echo "Cannot find common-lib."
+    echo "[FAIL] Cannot find common-lib."
     exit 1
 fi
 
-# Ensure mise is available
+# Early Skip Flows
 export PATH="$HOME/.local/bin:$PATH"
 if ! command -v mise &>/dev/null; then
-    fail "mise not found, skipping node apps installation"
+    pass "mise not found, skipping node apps installation"
     exit 0
 fi
 
 ensure_user_owned_dir "$HOME/.cache/mise"
-mise self-update
+mise self-update --yes
 
 for app in node bun; do
     mise use -g "$app@latest" || {

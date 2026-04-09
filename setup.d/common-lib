@@ -6,15 +6,15 @@ function errexit() {
     local err=$?
     set +o xtrace
     local code="${1:-1}"
-    echo "Error in ${BASH_SOURCE[1]}:${BASH_LINENO[0]}. '${BASH_COMMAND}' exited with status $err"
+    fail "Error in ${BASH_SOURCE[1]}:${BASH_LINENO[0]}. '${BASH_COMMAND}' exited with status $err"
     # Print out the stack trace described by $function_stack
     if [ ${#FUNCNAME[@]} -gt 2 ]; then
-        echo "Call tree:"
+        info "Call tree:"
         for ((i = 1; i < ${#FUNCNAME[@]} - 1; i++)); do
-            echo " $i: ${BASH_SOURCE[$i + 1]}:${BASH_LINENO[$i]} ${FUNCNAME[$i]}(...)"
+            info " $i: ${BASH_SOURCE[$i + 1]}:${BASH_LINENO[$i]} ${FUNCNAME[$i]}(...)"
         done
     fi
-    echo "Exiting with status ${code}"
+    info "Exiting with status ${code}"
     exit "${code}"
 }
 # trap ERR to provide an error handler whenever a command exits nonzero
@@ -29,34 +29,53 @@ set -eE -o pipefail -o errtrace
 _common_lib_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 . "$_common_lib_dir/../files/.bashrc.d/02-functions"
 
-# 定義顏色
-if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
+# 定義顏色 — 用 TERM 判斷，不依賴 fd 1 是否為 tty（setup_script_output_prefix 會將 fd 1 導入 pipe）
+if [[ "${TERM:-dumb}" != dumb ]] && command -v tput >/dev/null 2>&1; then
     GREEN=$(tput setaf 2 2>/dev/null || echo "")
     YELLOW=$(tput setaf 3 2>/dev/null || echo "")
     RED=$(tput setaf 1 2>/dev/null || echo "")
+    CYAN=$(tput setaf 6 2>/dev/null || echo "")
     NC=$(tput sgr0 2>/dev/null || echo "")
 else
     GREEN=""
     YELLOW=""
     RED=""
+    CYAN=""
     NC=""
 fi
 
+# Max visible width of [$script-name] across all setup.d scripts.
+# Update if a script with a longer name than [80-desktop-configs] (20 chars) is added.
+_SETUP_SCRIPT_NAME_MAX=20
+
+# Outer setup script needs padding so its log levels align with subscript output.
+# Subscript lines add (_SETUP_SCRIPT_NAME_MAX + 1) visible chars via inner sed;
+# the outer script's own lines must prepend the same number of spaces.
+if [[ -z "${SETUP_STATUS_DIR:-}" ]]; then
+    _LOG_PAD=$(printf "%$((_SETUP_SCRIPT_NAME_MAX + 1))s" '')
+else
+    _LOG_PAD=""
+fi
+
 pass() {
-    echo -e "${GREEN}[PASS]${NC} $1"
+    echo -e "${_LOG_PAD}${GREEN}[PASS]${NC} $1"
+}
+
+info() {
+    echo -e "${_LOG_PAD}${CYAN}[INFO]${NC} $1"
 }
 
 change() {
-    echo -e "${YELLOW}[CHANGE]${NC} $1"
+    echo -e "${_LOG_PAD}${YELLOW}[CHANGE]${NC} $1"
 }
 
 fail() {
-    echo -e "${RED}[FAIL]${NC} $1"
+    echo -e "${_LOG_PAD}${RED}[FAIL]${NC} $1"
 }
 
 warn() {
     export setup_warned=1
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo -e "${_LOG_PAD}${YELLOW}[WARN]${NC} $1"
 }
 
 # Only source /etc/lsb-release on Linux systems that have it
@@ -113,7 +132,7 @@ case $platform in
             sudo apt-get install -q -y aptitude
         fi
         ensure_pkg() {
-            change "Checking installation of: $*"
+            info "Checking installation of: $*"
             #shellcheck disable=SC2034
             mapfile -t installed_pkgs < <(dpkg-query --show --showformat='${db:Status-Status} ${Package}\n' "$@" | grep ^installed | cut -d" " -f2)
             pkgs_to_install=()
@@ -148,10 +167,15 @@ esac
 
 setup_script_output_prefix() {
     caller=${BASH_SOURCE[2]##*/}
+    local pad=""
+    if [[ -n "${SETUP_STATUS_DIR:-}" ]]; then
+        local pad_len=$((_SETUP_SCRIPT_NAME_MAX - ${#caller} - 2))
+        ((pad_len > 0)) && pad=$(printf '%*s' "$pad_len" '')
+    fi
     exec 5>&1
-    exec 1> >(sed -E "s#^#${YELLOW}[$caller]${NC} #" >&5)
+    exec 1> >(sed -E "s#^#${YELLOW}[$caller]${NC}${pad} #" >&5)
     exec 6>&2
-    exec 2> >(sed -E "s#^#${YELLOW}[$caller]${NC} #" >&6)
+    exec 2> >(sed -E "s#^#${YELLOW}[$caller]${NC}${pad} #" >&6)
 }
 
 record_setup_status() {
@@ -165,18 +189,18 @@ record_setup_status() {
 
 skip_script_if_executed() {
     if [[ " $* " = *" -f "* ]]; then
-        change "Force setup enabled, executing..."
+        info "Force setup enabled, executing..."
         return
     fi
     caller=${BASH_SOURCE[2]##*/}
     executed_ts=$(getfattr -n user.executed -d "${caller}" 2>/dev/null | sed -n 's/.*="\(.*\)"/\1/p' || echo "")
     if [[ -z "${executed_ts}" ]]; then
-        change "Executing..."
+        info "Executing..."
         return
     fi
     commonlib_ts=$(stat -c %Y "${BASH_SOURCE[1]}")
     if ((executed_ts < commonlib_ts)); then
-        change "Common library updated, executing..."
+        info "Common library updated, executing..."
         return
     fi
     file_ts=$(stat -c %Y "${caller}")
@@ -186,7 +210,7 @@ skip_script_if_executed() {
         export skipped=1
         exit
     fi
-    change "Executing..."
+    info "Executing..."
 }
 
 mark_script_executed() {

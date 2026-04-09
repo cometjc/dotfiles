@@ -5,8 +5,14 @@ if [[ -f "$common_lib" ]]; then
     # shellcheck source=common-lib
     . "$common_lib"
 else
-    echo "Cannot find common-lib."
+    echo "[FAIL] Cannot find common-lib."
     exit 1
+fi
+
+# Early Skip Flows
+if command -v deb-get >/dev/null 2>&1 && command -v dbeaver-ce >/dev/null 2>&1; then
+    pass "deb-get and dbeaver-ce already installed"
+    exit 0
 fi
 
 if ! command -v deb-get &>/dev/null; then
