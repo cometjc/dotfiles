@@ -8,3 +8,51 @@
 - 訊息語意要與行為一致：
   - 僅在「全部目標已就緒」時輸出 `already installed` / `skipping` 類訊息。
   - 前置不足或安裝失敗時輸出 `fail` 類訊息。
+
+## Early Skip Template
+
+```bash
+# 前置依賴（由較前序 setup script 準備）
+if ! command -v <prerequisite> >/dev/null 2>&1; then
+    fail "<prerequisite> not found. prerequisite setup.d/<xx-setup> should prepare it first."
+    exit 1
+fi
+
+# 安裝目標清單（多目標時必填完整）
+required_commands=(
+    cmd-a
+    cmd-b
+)
+required_files=(
+    "$HOME/path/to/file-a"
+    "$HOME/path/to/file-b"
+)
+
+all_targets_ready=true
+for cmd in "${required_commands[@]}"; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        all_targets_ready=false
+        break
+    fi
+done
+if $all_targets_ready; then
+    for file in "${required_files[@]}"; do
+        if [[ ! -f "$file" ]]; then
+            all_targets_ready=false
+            break
+        fi
+    done
+fi
+
+if $all_targets_ready; then
+    pass "<targets> are already installed, skipping"
+    exit 0
+fi
+```
+
+## Review Checklist
+
+- 若 script 會安裝多個工具，`required_commands` 是否完整覆蓋？
+- 若 script 會安裝設定檔/資源檔，`required_files` 是否完整覆蓋？
+- Skip 判斷是否只出現在 `all_targets_ready=true` 的分支？
+- 缺前置時是否為 `fail + exit 1`（不是 `pass` / `exit 0`）？
