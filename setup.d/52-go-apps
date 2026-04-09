@@ -21,17 +21,22 @@ mise use --global go@latest
 eval "$("$HOME/.local/bin/mise" activate bash)"
 
 packages=(
-    'github.com/BurntSushi/toml/cmd/tomlv@master'
-    'github.com/golangci/golangci-lint/cmd/golangci-lint@latest'
-    'golang.org/x/tools/cmd/goimports@latest'
-    'mvdan.cc/sh/v3/cmd/shfmt@latest'
-    'github.com/nao1215/gup@latest'
-    'github.com/mikefarah/yq/v4@latest'
-    'github.com/google/yamlfmt/cmd/yamlfmt@latest'
-    'github.com/ericchiang/pup@latest'
+    'github.com/BurntSushi/toml/cmd/tomlv'
+    'github.com/golangci/golangci-lint/cmd/golangci-lint'
+    'golang.org/x/tools/cmd/goimports'
+    'mvdan.cc/sh/v3/cmd/shfmt'
+    'github.com/nao1215/gup'
+    'github.com/mikefarah/yq/v4'
+    'github.com/google/yamlfmt/cmd/yamlfmt'
+    # pup@latest(目前解析到 0.4.0) 在 mise go backend 會觸發 -mod=readonly 失敗，先固定可用版本
+    'github.com/ericchiang/pup@v0.3.9'
 )
 
 for pkg in "${packages[@]}"; do
-    go install "$pkg"
+    versioned_pkg="$pkg"
+    [[ "$pkg" == *@* ]] || versioned_pkg="$pkg@latest"
+    mise use -g "go:$versioned_pkg"
 done
+mise use -g fzf@latest
+
 gup update || true
