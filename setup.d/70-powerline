@@ -10,13 +10,20 @@ else
 fi
 
 # Early Skip Flows
-if command -v powerline >/dev/null 2>&1; then
-    pass "powerline is already installed"
+# Ensure uv is in PATH
+export PATH="$HOME/.local/bin:$PATH"
+
+if command -v powerline >/dev/null 2>&1 \
+    && [[ -f "$HOME/.local/share/fonts/PowerlineSymbols.otf" ]] \
+    && [[ -f "$HOME/.config/fontconfig/conf.d/10-powerline-symbols.conf" ]]; then
+    pass "powerline and font targets are already installed"
     exit 0
 fi
 
-# Ensure uv is in PATH
-export PATH="$HOME/.local/bin:$PATH"
+if ! command -v uv &>/dev/null; then
+    fail "uv not found. prerequisite setup.d/53-python-apps should prepare it first."
+    exit 1
+fi
 
 repair_powerline_uv_tool() {
     local tool_dir="$HOME/.local/share/uv/tools/powerline-status"
@@ -64,13 +71,9 @@ repair_powerline_uv_tool() {
 }
 
 repair_powerline_uv_tool
-if ! command -v uv &>/dev/null; then
-    info "uv not found, skipping powerline installation"
-else
-    ensure_user_owned_dir "$HOME/.cache/uv"
-    uv tool install --with powerline-gitstatus powerline-status -p 3.8
-    repair_powerline_uv_tool
-fi
+ensure_user_owned_dir "$HOME/.cache/uv"
+uv tool install --with powerline-gitstatus powerline-status -p 3.8
+repair_powerline_uv_tool
 
 # Setup  https://github.com/powerline/fonts
 mkdir -p ~/.local/share/fonts/
