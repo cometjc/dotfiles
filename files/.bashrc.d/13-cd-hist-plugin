@@ -174,17 +174,21 @@ declare -A _cd_widget_cache
 cd_widget() {
 	local cd_target
 
-	# Check if tty is available for percol
 	if ! tty -s 2>/dev/null; then
 		return 1
 	fi
 
+	if ! command -v fzf >/dev/null 2>&1; then
+		echo "cd_widget: fzf not found" >&2
+		return 1
+	fi
+
 	# Query prerendered display_line directly from database
-	cd_target=$(percol --prompt-bottom --result-bottom-up <(
+	cd_target=$(fzf --prompt='cd> ' <(
 		sqlite3 "$cdhist_db" "SELECT display_line FROM cd_history WHERE display_line IS NOT NULL ORDER BY last_access DESC, access_count DESC LIMIT 100;"
 	) 2>/dev/null)
 
-	# If percol was cancelled or failed, return early
+	# If fzf was cancelled or failed, return early
 	if [[ -z "$cd_target" ]]; then
 		return 0
 	fi
