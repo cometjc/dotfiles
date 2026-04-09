@@ -13,10 +13,36 @@ fi
 # Ensure uv is in PATH
 export PATH="$HOME/.local/bin:$PATH"
 
-if command -v powerline >/dev/null 2>&1 \
-    && [[ -f "$HOME/.local/share/fonts/PowerlineSymbols.otf" ]] \
-    && [[ -f "$HOME/.config/fontconfig/conf.d/10-powerline-symbols.conf" ]]; then
-    pass "powerline and font targets are already installed"
+required_commands=(
+    powerline
+    powerline-config
+    powerline-daemon
+    powerline-lint
+    powerline-render
+)
+required_files=(
+    "$HOME/.local/share/fonts/PowerlineSymbols.otf"
+    "$HOME/.config/fontconfig/conf.d/10-powerline-symbols.conf"
+)
+
+all_targets_ready=true
+for cmd in "${required_commands[@]}"; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        all_targets_ready=false
+        break
+    fi
+done
+if $all_targets_ready; then
+    for file in "${required_files[@]}"; do
+        if [[ ! -f "$file" ]]; then
+            all_targets_ready=false
+            break
+        fi
+    done
+fi
+
+if $all_targets_ready; then
+    pass "powerline targets are already installed"
     exit 0
 fi
 
