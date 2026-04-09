@@ -12,7 +12,16 @@ fi
 # Early Skip Flows
 export PATH="$HOME/.local/bin:$PATH"
 if ! command -v mise &>/dev/null; then
-    pass "mise not found, skipping node apps installation"
+    fail "mise not found. prerequisite setup.d/50-mise should prepare it first."
+    exit 1
+fi
+
+if command -v node &>/dev/null \
+    && command -v bun &>/dev/null \
+    && command -v codex &>/dev/null \
+    && command -v copilot &>/dev/null \
+    && command -v gemini &>/dev/null; then
+    pass "node, bun, codex, copilot, and gemini are already available, skipping node apps installation"
     exit 0
 fi
 
@@ -22,13 +31,13 @@ mise self-update --yes
 for app in node bun; do
     mise use -g "$app@latest" || {
         fail "Failed to set $app to latest version"
-        exit 0
+        exit 1
     }
 done
 
 for app in @openai/codex @github/copilot @google/gemini-cli; do
     bun install -g "$app" || {
         fail "Failed to set $app to latest version"
-        exit 0
+        exit 1
     }
 done

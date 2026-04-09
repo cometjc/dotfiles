@@ -10,15 +10,45 @@ else
 fi
 
 # Early Skip Flows
-if ! command -v mise &>/dev/null && [[ ! -x "$HOME/.local/bin/mise" ]]; then
-    pass "mise not found, skipping go apps installation"
+export PATH="$HOME/.local/bin:$PATH"
+mise_bin="$(command -v mise 2>/dev/null || true)"
+if [[ -z "$mise_bin" && -x "$HOME/.local/bin/mise" ]]; then
+    mise_bin="$HOME/.local/bin/mise"
+fi
+if [[ -z "$mise_bin" ]]; then
+    fail "Cannot find mise executable. prerequisite setup.d/50-mise should prepare it first."
+    exit 1
+fi
+
+required_tools=(
+    tomlv
+    golangci-lint
+    goimports
+    shfmt
+    gup
+    yq
+    yamlfmt
+    pup
+    fzf
+)
+
+all_tools_available=true
+for tool in "${required_tools[@]}"; do
+    if ! command -v "$tool" &>/dev/null; then
+        all_tools_available=false
+        break
+    fi
+done
+
+if $all_tools_available; then
+    pass "Go app targets and fzf are already available, skipping installation"
     exit 0
 fi
 
 ensure_user_owned_dir "$HOME/.cache/mise"
-eval "$("$HOME/.local/bin/mise" activate bash)"
-mise use --global go@latest
-eval "$("$HOME/.local/bin/mise" activate bash)"
+eval "$("$mise_bin" activate bash)"
+"$mise_bin" use --global go@latest
+eval "$("$mise_bin" activate bash)"
 
 packages=(
     'github.com/BurntSushi/toml/cmd/tomlv'
@@ -35,8 +65,8 @@ packages=(
 for pkg in "${packages[@]}"; do
     versioned_pkg="$pkg"
     [[ "$pkg" == *@* ]] || versioned_pkg="$pkg@latest"
-    mise use -g "go:$versioned_pkg"
+    "$mise_bin" use -g "go:$versioned_pkg"
 done
-mise use -g fzf@latest
+"$mise_bin" use -g fzf@latest
 
 gup update || true
