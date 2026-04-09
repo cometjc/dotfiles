@@ -184,7 +184,7 @@ cd_widget() {
 	fi
 
 	# Query prerendered display_line directly from database
-	cd_target=$(fzf <(
+	cd_target=$(fzf --prompt='cd> ' <(
 		sqlite3 "$cdhist_db" "SELECT display_line FROM cd_history WHERE display_line IS NOT NULL ORDER BY last_access DESC, access_count DESC LIMIT 100;"
 	) 2>/dev/null)
 
