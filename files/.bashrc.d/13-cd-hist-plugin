@@ -172,6 +172,10 @@ EOF
 declare -A _cd_widget_cache
 
 cd_widget() {
+	# Signal to PROMPT_COMMAND that this is a widget (not a user command).
+	# bind -x does not change $?, so without this flag the prompt would inherit
+	# the previous command's exit code and the cmd-timer would fire wrongly.
+	_SKIP_CMD_TRACKING=1
 	local cd_target
 
 	if ! tty -s 2>/dev/null; then

@@ -1,0 +1,27 @@
+#!/bin/bash
+# Correct the exit status shown in the prompt for empty commands and shell widgets.
+#
+# Problem: powerline is prepended to PROMPT_COMMAND by 80-theme-powerline, so it
+# captures $? before command_tracking_end (15-cmd-timer) can reset it to 0.
+# Meanwhile, `bind -x` widgets don't change $?, so the previous command's exit
+# code bleeds through into the prompt after Alt+s / cd_widget.
+#
+# Fix: prepend _last_exit_corrector here (runs after 80-theme-powerline prepends
+# powerline) so the order becomes:
+#   [direnv] -> [_last_exit_corrector] -> [powerline] -> [command_tracking_end]
+#
+# _SKIP_CMD_TRACKING is set by shell widgets (cd_widget) that should not count
+# as user commands.
+
+_last_exit_corrector() {
+    local ec=$?
+    # Suppress exit code display when:
+    #   - no real user command ran (empty Enter)
+    #   - a widget set the skip-tracking flag
+    if [[ -n "$last_command" && -z "$_SKIP_CMD_TRACKING" ]]; then
+        return $ec
+    fi
+    return 0
+}
+
+_add_prompt_command prepend "_last_exit_corrector"

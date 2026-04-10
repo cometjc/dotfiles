@@ -60,6 +60,10 @@ command_tracking_start() {
 
 command_tracking_end() {
 	local previous_exit_status=$?
+	if [[ -n "$_SKIP_CMD_TRACKING" ]]; then
+		unset _SKIP_CMD_TRACKING last_command last_command_ts
+		return 0
+	fi
 	if [[ -n "$last_command" ]]; then
 		command_timer_stop $previous_exit_status
 		unset last_command
