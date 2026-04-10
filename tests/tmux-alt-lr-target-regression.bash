@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-target_script="$repo_root/scripts/tmux-alt-lr-target.sh"
+target_script="$repo_root/files/.tmux.d/tmux-alt-lr-target.sh"
 
 fail() {
     echo "FAIL: $*" >&2

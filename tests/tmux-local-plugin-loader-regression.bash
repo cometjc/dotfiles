@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-loader_script="$repo_root/scripts/tmux-local-plugins-loader.sh"
+loader_script="$repo_root/files/.tmux.d/tmux-local-plugins-loader.sh"
 
 fail() {
     echo "FAIL: $*" >&2

@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 copilot_hooks="$repo_root/.github/hooks/workmux-status/hooks.json"
-sync_width_script="$repo_root/scripts/tmux-sync-session-width.sh"
+sync_width_script="$repo_root/files/.tmux.d/tmux-sync-session-width.sh"
 
 fail() {
     echo "FAIL: $*" >&2
