@@ -76,4 +76,8 @@ second_run="$(run_probe)"
 assert_contains "$second_run" "HIT=1" "second run should hit env cache"
 assert_contains "$second_run" "CACHE_PRESENT=1" "cache file should remain present"
 
+if grep -q '^export TERM=' "$cache_file"; then
+    fail "env cache should not persist TERM; terminal type must come from current session"
+fi
+
 echo "PASS: bashrc env cache regression check"

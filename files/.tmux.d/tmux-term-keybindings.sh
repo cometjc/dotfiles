@@ -8,6 +8,13 @@
 TERM_NAME="${1:-}"
 CLIENT="${2:-}"
 
+reset_window_switch_bindings() {
+    tmux unbind-key -n C-Left 2>/dev/null || true
+    tmux unbind-key -n C-Right 2>/dev/null || true
+    tmux unbind-key -n M-Left 2>/dev/null || true
+    tmux unbind-key -n M-Right 2>/dev/null || true
+}
+
 popup_wait_for_escape() {
     cat <<'EOF'
 deadline=$((SECONDS + 3))
@@ -36,17 +43,19 @@ show_keybinding_popup() {
 
 case "$TERM_NAME" in
     putty-256color)
-        tmux unbind-key -n C-Left 2>/dev/null || true
-        tmux unbind-key -n C-Right 2>/dev/null || true
+        reset_window_switch_bindings
         tmux bind-key -n M-Left previous-window
         tmux bind-key -n M-Right next-window
         show_keybinding_popup 36 '\n  PuTTY 模式\n  Alt+← / Alt+→  切換 window\n'
         ;;
     linux)
-        tmux unbind-key -n M-Left 2>/dev/null || true
-        tmux unbind-key -n M-Right 2>/dev/null || true
+        reset_window_switch_bindings
         tmux bind-key -n C-Left previous-window
         tmux bind-key -n C-Right next-window
         show_keybinding_popup 40 '\n  Linux console 模式\n  Ctrl+← / Ctrl+→  切換 window\n'
+        ;;
+    *)
+        # Unknown terminal: clear any stale global overrides from previous attaches.
+        reset_window_switch_bindings
         ;;
 esac
