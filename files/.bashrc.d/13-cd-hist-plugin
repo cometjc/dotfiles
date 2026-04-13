@@ -7,12 +7,12 @@ export cdhist_file="$HOME/.cd_history"
 
 # SQL escape helper: escape single quotes for SQL strings
 sql_quote() {
-	printf "%s" "$1" | sed "s/'/''/g"
+    printf "%s" "$1" | sed "s/'/''/g"
 }
 
 # Initialize database and ensure table exists
 init_cdhist_db() {
-	sqlite3 "$cdhist_db" <<'EOF' >/dev/null 2>&1
+    sqlite3 "$cdhist_db" <<'EOF' >/dev/null 2>&1
 CREATE TABLE IF NOT EXISTS cd_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     path TEXT NOT NULL,
@@ -25,8 +25,8 @@ CREATE INDEX IF NOT EXISTS idx_realpath ON cd_history(realpath);
 CREATE INDEX IF NOT EXISTS idx_last_access ON cd_history(last_access DESC);
 PRAGMA journal_mode=WAL;
 EOF
-	# Add display_line column if it doesn't exist (for migration)
-	sqlite3 "$cdhist_db" "ALTER TABLE cd_history ADD COLUMN display_line TEXT;" 2>/dev/null || true
+    # Add display_line column if it doesn't exist (for migration)
+    sqlite3 "$cdhist_db" "ALTER TABLE cd_history ADD COLUMN display_line TEXT;" 2>/dev/null || true
 }
 
 # Always initialize database to ensure table exists
@@ -34,129 +34,129 @@ init_cdhist_db
 
 # Migrate old .cd_history file to database (one-time migration)
 migrate_cdhist() {
-	local old_file="$HOME/.cd_history"
-	local valid_file
-	local migrated_count=0
-	local current_time
+    local old_file="$HOME/.cd_history"
+    local valid_file
+    local migrated_count=0
+    local current_time
 
-	# Check if old file exists and database is empty
-	if [[ ! -f "$old_file" ]]; then
-		return 0
-	fi
+    # Check if old file exists and database is empty
+    if [[ ! -f "$old_file" ]]; then
+        return 0
+    fi
 
-	# Ensure database is initialized
-	init_cdhist_db
+    # Ensure database is initialized
+    init_cdhist_db
 
-	# Check if database already has entries
-	if sqlite3 "$cdhist_db" "SELECT COUNT(*) FROM cd_history;" 2>/dev/null | grep -q '^[1-9]'; then
-		return 0
-	fi
+    # Check if database already has entries
+    if sqlite3 "$cdhist_db" "SELECT COUNT(*) FROM cd_history;" 2>/dev/null | grep -q '^[1-9]'; then
+        return 0
+    fi
 
-	valid_file=$(mktemp)
-	current_time=$(date +%s)
+    valid_file=$(mktemp)
+    current_time=$(date +%s)
 
-	# Read old file, dedup by realpath, keep most recent occurrence
-	# Process in reverse order to preserve most recent access
-	# Use awk for dedup and collect valid paths
-	tac "$old_file" 2>/dev/null | awk '!seen[$0]++' | while IFS= read -r line; do
-		[[ -z "$line" ]] && continue
+    # Read old file, dedup by realpath, keep most recent occurrence
+    # Process in reverse order to preserve most recent access
+    # Use awk for dedup and collect valid paths
+    tac "$old_file" 2>/dev/null | awk '!seen[$0]++' | while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
 
-		# Get realpath and verify directory exists
-		local real_line
-		real_line=$(timeout 0.5 realpath "$line" 2>/dev/null || echo "$line")
-		if [[ -n "$real_line" ]] && timeout 0.5 test -d "$real_line" 2>/dev/null; then
-			# Store path:realpath pairs for batch insertion
-			printf '%s|%s\n' "$line" "$real_line"
-		fi
-	done >"$valid_file"
+        # Get realpath and verify directory exists
+        local real_line
+        real_line=$(timeout 0.5 realpath "$line" 2>/dev/null || echo "$line")
+        if [[ -n "$real_line" ]] && timeout 0.5 test -d "$real_line" 2>/dev/null; then
+            # Store path:realpath pairs for batch insertion
+            printf '%s|%s\n' "$line" "$real_line"
+        fi
+    done >"$valid_file"
 
-	# Batch insert into database
-	if [[ -s "$valid_file" ]]; then
-		local offset=0
-		local total_lines
-		total_lines=$(wc -l <"$valid_file" 2>/dev/null || echo 0)
+    # Batch insert into database
+    if [[ -s "$valid_file" ]]; then
+        local offset=0
+        local total_lines
+        total_lines=$(wc -l <"$valid_file" 2>/dev/null || echo 0)
 
-		while IFS='|' read -r path realpath; do
-			# Insert with decrementing timestamp to preserve order (most recent first)
-			sqlite3 "$cdhist_db" <<EOF >/dev/null 2>&1
+        while IFS='|' read -r path realpath; do
+            # Insert with decrementing timestamp to preserve order (most recent first)
+            sqlite3 "$cdhist_db" <<EOF >/dev/null 2>&1
 PRAGMA journal_mode=WAL;
 INSERT OR IGNORE INTO cd_history (realpath, path, last_access, access_count)
 VALUES ('$(sql_quote "$realpath")', '$(sql_quote "$path")', $((current_time - offset)), 1);
 EOF
-			((offset++))
-		done <"$valid_file"
+            ((offset++))
+        done <"$valid_file"
 
-		migrated_count=$total_lines
+        migrated_count=$total_lines
 
-		# Backup old file after successful migration
-		if ((migrated_count > 0)); then
-			mv "$old_file" "${old_file}.backup.$(date +%Y%m%d_%H%M%S)" 2>/dev/null
-		fi
-	fi
+        # Backup old file after successful migration
+        if ((migrated_count > 0)); then
+            mv "$old_file" "${old_file}.backup.$(date +%Y%m%d_%H%M%S)" 2>/dev/null
+        fi
+    fi
 
-	rm -f "$valid_file"
+    rm -f "$valid_file"
 }
 
 # Run migration once on first load
 if [[ -f "$cdhist_file" ]]; then
-	(migrate_cdhist &)
+    (migrate_cdhist &)
 fi
 
 IFS=:
 if [[ ! ":${chpwd_functions[*]}:" =~ :append_cdhist: ]]; then
-	chpwd_functions+=(append_cdhist)
+    chpwd_functions+=(append_cdhist)
 fi
 unset IFS
 
 append_cdhist() {
-	local real_dir current_path
-	real_dir=$(realpath "$PWD" 2>/dev/null || echo "$PWD")
-	current_path="$PWD"
+    local real_dir current_path
+    real_dir=$(realpath "$PWD" 2>/dev/null || echo "$PWD")
+    current_path="$PWD"
 
-	# SQLite handles concurrency internally with WAL mode
-	# Run in background silently to avoid blocking cd command
-	# Calculate prerendered display line and save to database
-	# Start the task in a subshell and immediately disown it to prevent job control messages
-	# The initial [1] PID message may still appear, but the Done message will be suppressed
-	( (
-		local new_access_count new_last_access relative_time path_display display_line
-		# Get new access_count and last_access
-		new_access_count=$(sqlite3 "$cdhist_db" "SELECT COALESCE((SELECT access_count FROM cd_history WHERE realpath='$(sql_quote "$real_dir")'), 0) + 1;" 2>/dev/null)
-		new_last_access=$(date +%s)
+    # SQLite handles concurrency internally with WAL mode
+    # Run in background silently to avoid blocking cd command
+    # Calculate prerendered display line and save to database
+    # Start the task in a subshell and immediately disown it to prevent job control messages
+    # The initial [1] PID message may still appear, but the Done message will be suppressed
+    ( (
+        local new_access_count new_last_access relative_time path_display display_line
+        # Get new access_count and last_access
+        new_access_count=$(sqlite3 "$cdhist_db" "SELECT COALESCE((SELECT access_count FROM cd_history WHERE realpath='$(sql_quote "$real_dir")'), 0) + 1;" 2>/dev/null)
+        new_last_access=$(date +%s)
 
-		# Format last access time as mm.dd-HH:MM
-		relative_time=$(date -d "@$new_last_access" +"%m.%d %H:%M" 2>/dev/null || date -r "$new_last_access" +"%m.%d-%H:%M" 2>/dev/null || echo "??.??-??:??")
+        # Format last access time as mm.dd-HH:MM
+        relative_time=$(date -d "@$new_last_access" +"%m.%d %H:%M" 2>/dev/null || date -r "$new_last_access" +"%m.%d-%H:%M" 2>/dev/null || echo "??.??-??:??")
 
-		# Format path display (replace $HOME with ~ and trim whitespace)
-		path_display=$(printf '%s' "$current_path" | sed -e "s@^$HOME@~@" -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        # Format path display (replace $HOME with ~ and trim whitespace)
+        path_display=$(printf '%s' "$current_path" | sed -e "s@^$HOME@~@" -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
 
-		# Format display line: [time] [count] path (using static widths)
-		# Limit access_count to 99999 to ensure fixed-width format (5 digits max)
-		display_count=$((new_access_count > 99999 ? 99999 : new_access_count))
-		display_line=$(printf '[%11s] [%5d] %s' "$relative_time" "$display_count" "$path_display")
+        # Format display line: [time] [count] path (using static widths)
+        # Limit access_count to 99999 to ensure fixed-width format (5 digits max)
+        display_count=$((new_access_count > 99999 ? 99999 : new_access_count))
+        display_line=$(printf '[%11s] [%5d] %s' "$relative_time" "$display_count" "$path_display")
 
-		# Update database with prerendered display line
-		sqlite3 "$cdhist_db" <<EOF >/dev/null 2>&1
+        # Update database with prerendered display line
+        sqlite3 "$cdhist_db" <<EOF >/dev/null 2>&1
 PRAGMA journal_mode=WAL;
 INSERT OR REPLACE INTO cd_history (realpath, path, last_access, access_count, display_line)
 VALUES ('$(sql_quote "$real_dir")', '$(sql_quote "$current_path")', $new_last_access, $new_access_count, '$(sql_quote "$display_line")');
 EOF
-	) &)
+    ) &)
 }
 
 cleanup_cdhist() {
-	# Remove entries for directories that no longer exist
-	# Use id for deletion to avoid SQL escaping
-	sqlite3 "$cdhist_db" "SELECT id, realpath FROM cd_history;" | while IFS='|' read -r entry_id realpath; do
-		if ! timeout 0.5 test -d "$realpath" 2>/dev/null; then
-			sqlite3 "$cdhist_db" "DELETE FROM cd_history WHERE id = $entry_id;" >/dev/null 2>&1
-		fi
-	done
+    # Remove entries for directories that no longer exist
+    # Use id for deletion to avoid SQL escaping
+    sqlite3 "$cdhist_db" "SELECT id, realpath FROM cd_history;" | while IFS='|' read -r entry_id realpath; do
+        if ! timeout 0.5 test -d "$realpath" 2>/dev/null; then
+            sqlite3 "$cdhist_db" "DELETE FROM cd_history WHERE id = $entry_id;" >/dev/null 2>&1
+        fi
+    done
 
-	# SQLite WAL mode handles concurrency internally, can directly operate on DB
-	# First keep top 1000 entries by last_access, then remove non-existent directories
-	# This reduces the number of directories we need to check
-	sqlite3 "$cdhist_db" <<'EOF' >/dev/null 2>&1
+    # SQLite WAL mode handles concurrency internally, can directly operate on DB
+    # First keep top 1000 entries by last_access, then remove non-existent directories
+    # This reduces the number of directories we need to check
+    sqlite3 "$cdhist_db" <<'EOF' >/dev/null 2>&1
 PRAGMA journal_mode=WAL;
 DELETE FROM cd_history
 WHERE id NOT IN (
@@ -172,52 +172,52 @@ EOF
 declare -A _cd_widget_cache
 
 cd_widget() {
-	# Signal to PROMPT_COMMAND that this is a widget (not a user command).
-	# bind -x does not change $?, so without this flag the prompt would inherit
-	# the previous command's exit code and the cmd-timer would fire wrongly.
-	_SKIP_CMD_TRACKING=1
-	local cd_target
+    # Signal to PROMPT_COMMAND that this is a widget (not a user command).
+    # bind -x does not change $?, so without this flag the prompt would inherit
+    # the previous command's exit code and the cmd-timer would fire wrongly.
+    _SKIP_CMD_TRACKING=1
+    local cd_target
 
-	if ! tty -s 2>/dev/null; then
-		return 1
-	fi
+    if ! tty -s 2>/dev/null; then
+        return 1
+    fi
 
-	if ! command -v fzf >/dev/null 2>&1; then
-		echo "cd_widget: fzf not found" >&2
-		return 1
-	fi
+    if ! command -v fzf >/dev/null 2>&1; then
+        echo "cd_widget: fzf not found" >&2
+        return 1
+    fi
 
-	# Query prerendered display_line directly from database
-	cd_target=$(fzf --scheme=path --prompt='cd> ' < <(
-		sqlite3 "$cdhist_db" "SELECT display_line FROM cd_history WHERE display_line IS NOT NULL ORDER BY last_access DESC, access_count DESC LIMIT 100;"
-	) 2>/dev/null)
+    # Query prerendered display_line directly from database
+    cd_target=$(fzf --no-sort --prompt='cd> ' < <(
+        sqlite3 "$cdhist_db" "SELECT display_line FROM cd_history WHERE display_line IS NOT NULL ORDER BY last_access DESC, access_count DESC LIMIT 100;"
+    ) 2>/dev/null)
 
-	# If fzf was cancelled or failed, return early
-	if [[ -z "$cd_target" ]]; then
-		return 0
-	fi
+    # If fzf was cancelled or failed, return early
+    if [[ -z "$cd_target" ]]; then
+        return 0
+    fi
 
-	# Extract actual path from display_line format: "[time] [count] path"
-	# Format: [%11s] [%5d] %s, prefix is fixed 22 characters (1+11+1+1+1+5+1+1)
-	# Note: access_count is capped at 99999 to maintain fixed-width format
-	# Path is already trimmed when appended, so no need to trim again
-	cd_target="${cd_target:22}"
+    # Extract actual path from display_line format: "[time] [count] path"
+    # Format: [%11s] [%5d] %s, prefix is fixed 22 characters (1+11+1+1+1+5+1+1)
+    # Note: access_count is capped at 99999 to maintain fixed-width format
+    # Path is already trimmed when appended, so no need to trim again
+    cd_target="${cd_target:22}"
 
-	# Expand ~ to $HOME
-	if [[ "$cd_target" == ~* ]]; then
-		cd_target="${cd_target/#\~/$HOME}"
-	fi
+    # Expand ~ to $HOME
+    if [[ "$cd_target" == ~* ]]; then
+        cd_target="${cd_target/#\~/$HOME}"
+    fi
 
-	# Cleanup in background (less frequent, SQLite handles concurrency)
-	if ((RANDOM % 10 == 0)); then
-		(cleanup_cdhist &)
-	fi
+    # Cleanup in background (less frequent, SQLite handles concurrency)
+    if ((RANDOM % 10 == 0)); then
+        (cleanup_cdhist &)
+    fi
 
-	# Change directory
-	# Use cd instead of builtin cd to trigger chpwd_functions hook
-	# This will automatically call append_cdhist and other hooks like _mise_hook
-	cd "$cd_target"
-	return 0
+    # Change directory
+    # Use cd instead of builtin cd to trigger chpwd_functions hook
+    # This will automatically call append_cdhist and other hooks like _mise_hook
+    cd "$cd_target"
+    return 0
 }
 
 # if this is interactive shell, keep Alt+s as a two-step binding:
@@ -226,6 +226,6 @@ cd_widget() {
 # Direct Alt+s -> bind -x skipped that redraw, so the prompt stayed stale until
 # the next command even though PWD had already changed.
 if [[ $- =~ .*i.* ]]; then
-	bind -x '"\C-x\C-s": "cd_widget"'
-	bind '"\es": "\C-x\C-s\n"'
+    bind -x '"\C-x\C-s": "cd_widget"'
+    bind '"\es": "\C-x\C-s\n"'
 fi

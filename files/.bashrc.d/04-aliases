@@ -250,8 +250,8 @@ gitproj() {
     remote="${1:-origin}"
     url="$(git remote get-url "$remote" 2>/dev/null || git remote get-url origin 2>/dev/null || git remote get-url upstream 2>/dev/null)" || {
         echo "Not in a git repo (or no remote found)." >&2
-            return 1
-        }
+        return 1
+    }
 
     # Parse SSH form: git@host:group/repo.git
     if [[ "$url" =~ ^git@([^:]+):(.+)$ ]]; then
@@ -271,15 +271,17 @@ gitproj() {
     fi
 
     case "$host" in
-        gitlab.teamt5.net|gitlab.com|github.com) ;;
-        *) echo "Host not supported: $host" >&2; return 1 ;;
+        gitlab.teamt5.net | gitlab.com | github.com) ;;
+        *)
+            echo "Host not supported: $host" >&2
+            return 1
+            ;;
     esac
 
     path="${path%.git}"
     web="https://$host/$path"
     echo "Project URL: $web"
 }
-
 
 # gitignore 函式，將指定路徑逐一轉換為相對於 repo_root 的路徑，並加入到 .git/info/exclude
 gitignore() {
