@@ -19,6 +19,143 @@ export LC_COLLATE=$LANG
 export LC_ALL=$LANG
 unset LANG
 
+DOTFILES_REPO="${DOTFILES_REPO:-$HOME/repo/dotfiles}"
+DOTFILES_ENV_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles/bashrc-env"
+DOTFILES_ENV_CACHE_KEY=""
+DOTFILES_ENV_CACHE_FILE=""
+DOTFILES_ENV_CACHE_HIT=0
+DOTFILES_SHELL_CACHE_FILE=""
+DOTFILES_SHELL_CACHE_HIT=0
+
+_dotfiles_env_cache_should_skip_var() {
+    case "$1" in
+        BASHPID | BASHOPTS | BASH_ARGC | BASH_ARGV | BASH_ARGV0 | BASH_COMMAND | BASH_LINENO | BASH_SOURCE | BASH_SUBSHELL | BASH_VERSINFO | BASH_VERSION | COLUMNS | DIRSTACK | EUID | FUNCNAME | GROUPS | LINES | LINENO | MACHTYPE | OSTYPE | PIPESTATUS | PPID | PWD | OLDPWD | RANDOM | SECONDS | SHELLOPTS | SHLVL | UID | _ | SSH_AUTH_SOCK | SSH_AGENT_PID | SSH_CLIENT | SSH_CONNECTION | SSH_TTY | TMUX | TMUX_PANE | WINDOWID | DISPLAY | XAUTHORITY)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+_dotfiles_env_cache_init() {
+    [[ "${DOTFILES_DISABLE_ENV_CACHE:-0}" == "1" ]] && return 0
+    local base_key dirty_mark=""
+    base_key="$(git -C "$DOTFILES_REPO" rev-parse --verify HEAD 2>/dev/null || true)"
+    [[ -n "$base_key" ]] || return 0
+    if ! git -C "$DOTFILES_REPO" diff --quiet -- files/.bashrc files/.bashrc.d 2>/dev/null \
+        || ! git -C "$DOTFILES_REPO" diff --cached --quiet -- files/.bashrc files/.bashrc.d 2>/dev/null; then
+        dirty_mark="-dirty"
+    fi
+    DOTFILES_ENV_CACHE_KEY="${base_key}${dirty_mark}"
+    DOTFILES_ENV_CACHE_FILE="$DOTFILES_ENV_CACHE_DIR/env-${DOTFILES_ENV_CACHE_KEY}.sh"
+    DOTFILES_SHELL_CACHE_FILE="$DOTFILES_ENV_CACHE_DIR/shell-${DOTFILES_ENV_CACHE_KEY}.sh"
+}
+
+_dotfiles_env_cache_load() {
+    [[ "${DOTFILES_DISABLE_ENV_CACHE:-0}" == "1" ]] && return 0
+    [[ -n "$DOTFILES_ENV_CACHE_FILE" ]] || return 0
+    if [[ -r "$DOTFILES_ENV_CACHE_FILE" ]]; then
+        # shellcheck disable=SC1090
+        source "$DOTFILES_ENV_CACHE_FILE"
+        DOTFILES_ENV_CACHE_HIT=1
+    fi
+}
+
+_dotfiles_shell_cache_load() {
+    [[ "${DOTFILES_DISABLE_ENV_CACHE:-0}" == "1" ]] && return 0
+    [[ -n "$DOTFILES_SHELL_CACHE_FILE" ]] || return 0
+    if [[ -r "$DOTFILES_SHELL_CACHE_FILE" ]]; then
+        # shellcheck disable=SC1090
+        source "$DOTFILES_SHELL_CACHE_FILE"
+        DOTFILES_SHELL_CACHE_HIT=1
+        # Guard against cached functions shadowing critical builtins.
+        if [[ "$(type -t command 2>/dev/null)" == "function" ]]; then
+            unset -f command
+            DOTFILES_SHELL_CACHE_HIT=0
+            rm -f "$DOTFILES_SHELL_CACHE_FILE" 2>/dev/null || true
+        fi
+    fi
+}
+
+_dotfiles_env_cache_save() {
+    [[ "${DOTFILES_DISABLE_ENV_CACHE:-0}" == "1" ]] && return 0
+    [[ -n "$DOTFILES_ENV_CACHE_FILE" ]] || return 0
+    ((DOTFILES_ENV_CACHE_HIT == 1)) && return 0
+
+    mkdir -p "$DOTFILES_ENV_CACHE_DIR" 2>/dev/null || return 0
+    local tmp_file
+    tmp_file="$(mktemp "$DOTFILES_ENV_CACHE_DIR/.env-${DOTFILES_ENV_CACHE_KEY}.XXXXXX" 2>/dev/null)" || return 0
+
+    {
+        printf '#!/bin/bash\n'
+        printf '# dotfiles env cache\n'
+        printf '# key=%s\n' "$DOTFILES_ENV_CACHE_KEY"
+        while IFS= read -r var_name; do
+            _dotfiles_env_cache_should_skip_var "$var_name" && continue
+            printf 'export %s=%q\n' "$var_name" "${!var_name}"
+        done < <(compgen -e | LC_ALL=C sort)
+    } >"$tmp_file" 2>/dev/null || {
+        rm -f "$tmp_file"
+        return 0
+    }
+
+    mv "$tmp_file" "$DOTFILES_ENV_CACHE_FILE" 2>/dev/null || rm -f "$tmp_file"
+}
+
+_dotfiles_shell_cache_save() {
+    [[ "${DOTFILES_DISABLE_ENV_CACHE:-0}" == "1" ]] && return 0
+    [[ -n "$DOTFILES_SHELL_CACHE_FILE" ]] || return 0
+    ((DOTFILES_SHELL_CACHE_HIT == 1)) && return 0
+
+    mkdir -p "$DOTFILES_ENV_CACHE_DIR" 2>/dev/null || return 0
+    local tmp_file
+    local fn
+    tmp_file="$(mktemp "$DOTFILES_ENV_CACHE_DIR/.shell-${DOTFILES_ENV_CACHE_KEY}.XXXXXX" 2>/dev/null)" || return 0
+
+    {
+        printf '#!/bin/bash\n'
+        printf '# dotfiles shell state cache\n'
+        printf '# key=%s\n' "$DOTFILES_ENV_CACHE_KEY"
+        printf 'shopt -s extglob\n'
+        printf 'shopt -s progcomp\n'
+        printf '# aliases\n'
+        alias -p
+        printf '\n# functions\n'
+        while IFS= read -r fn; do
+            case "$fn" in
+                _dotfiles_env_cache_* | _dotfiles_shell_cache_* | command)
+                    continue
+                    ;;
+            esac
+            # If an alias has the same name, declare -f prints `name ()` form,
+            # which can trip alias expansion on replay (e.g., alias mv + mv()).
+            if alias "$fn" >/dev/null 2>&1; then
+                continue
+            fi
+            declare -f "$fn"
+        done < <(declare -F | awk '{print $3}' | LC_ALL=C sort)
+        printf '\n# bind mappings\n'
+        printf "if [[ \$- == *i* ]]; then\n"
+        printf "bind -f /dev/stdin <<'__DOTFILES_BIND__'\n"
+        bind -p 2>/dev/null || true
+        printf "__DOTFILES_BIND__\n"
+        while IFS= read -r bind_line; do
+            printf 'bind -x %q\n' "$bind_line"
+        done < <(bind -x 2>/dev/null || true)
+        printf "fi\n"
+        printf '\n# completion definitions\n'
+        complete -p 2>/dev/null || true
+    } >"$tmp_file" 2>/dev/null || {
+        rm -f "$tmp_file"
+        return 0
+    }
+
+    mv "$tmp_file" "$DOTFILES_SHELL_CACHE_FILE" 2>/dev/null || rm -f "$tmp_file"
+}
+
+_dotfiles_env_cache_init
+_dotfiles_env_cache_load
+_dotfiles_shell_cache_load
+
 _add_prompt_command() {
     local action="$1"
     shift
@@ -267,6 +404,10 @@ include_scripts() {
     mapfile -t bashrc_list < <(find ~/.bashrc.d/ -name '[^.]*' -type f -print0 | xargs -r -0 ls -1 | sort)
     # disable errexit
     local reset
+    local quiet_source=0
+    if ((DOTFILES_ENV_CACHE_HIT == 1)); then
+        quiet_source=1
+    fi
     reset=$(shopt -p -o errexit)
     shopt -u -o errexit
     # save stderr
@@ -275,9 +416,14 @@ include_scripts() {
     for file in "${bashrc_list[@]}"; do
         if [ -f "$file" ]; then
             name=$(basename "$file")
-            echo -e "${YELLOW}[Sourcing] ${name}${RESET}"
-            # shellcheck source=/dev/null
-            source "$file" > >(sed -E "s/(.*)/  ${CYAN}${name}: &${RESET}/") 2> >(sed -E "s/(.*)/  ${RED}${name}: &${RESET}/" >&2)
+            if ((quiet_source)); then
+                # shellcheck source=/dev/null
+                source "$file"
+            else
+                echo -e "${YELLOW}[Sourcing] ${name}${RESET}"
+                # shellcheck source=/dev/null
+                source "$file" > >(sed -E "s/(.*)/  ${CYAN}${name}: &${RESET}/") 2> >(sed -E "s/(.*)/  ${RED}${name}: &${RESET}/" >&2)
+            fi
         fi
     done
     # restore stderr
@@ -286,12 +432,38 @@ include_scripts() {
     eval "$reset"
 }
 
-include_scripts
+restore_uncached_runtime_state() {
+    local file
+    local -a runtime_files=(
+        "$HOME/.bashrc.d/10-init-zsh-cd-hooks"
+        "$HOME/.bashrc.d/13-cd-hist-plugin"
+        "$HOME/.bashrc.d/15-cmd-timer"
+        "$HOME/.bashrc.d/51-env-direnv"
+        "$HOME/.bashrc.d/52-env-mise"
+        "$HOME/.bashrc.d/80-theme-powewrline"
+        "$HOME/.bashrc.d/91-post-source-bashrc"
+        "$HOME/.bashrc.d/92-exit-corrector"
+    )
+
+    for file in "${runtime_files[@]}"; do
+        if [[ -f "$file" ]]; then
+            # shellcheck source=/dev/null
+            source "$file"
+        fi
+    done
+}
+
+if ((DOTFILES_SHELL_CACHE_HIT == 0)); then
+    include_scripts
+else
+    restore_uncached_runtime_state
+fi
 
 # Task Master aliases added on 2025/7/24
 alias tm='task-master'
 alias taskmaster='task-master'
-source $HOME/repo/sre/bashrc
+# shellcheck source=/dev/null
+source "$HOME/repo/sre/bashrc"
 eval "$(direnv hook bash)"
 
 # Added by `rbenv init` on 西元2025年08月20日 (週三) 10時26分09秒 CST
@@ -315,3 +487,6 @@ if [[ -f "$HOME/.local/bin/env" ]]; then
     # shellcheck source=/dev/null
     . "$HOME/.local/bin/env"
 fi
+
+_dotfiles_env_cache_save
+_dotfiles_shell_cache_save

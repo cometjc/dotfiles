@@ -202,6 +202,126 @@ WHERE id NOT IN (
 EOF
     ) 9>"$lockfile"
 }
+
+normalize_cdhist_path() {
+    local path="$1"
+    local normalized
+
+    normalized=$(realpath -m -- "$path" 2>/dev/null || printf '%s' "$path")
+    if [[ "$normalized" == "$HOME" ]]; then
+        printf '~'
+    elif [[ "$normalized" == "$HOME/"* ]]; then
+        printf '~/%s' "${normalized#$HOME/}"
+    else
+        printf '%s' "$normalized"
+    fi
+}
+
+update_cdhist_after_move() {
+    local src_arg="$1"
+    local dst_arg="$2"
+    local dst_was_dir="${3:-0}"
+    local src_abs dst_abs moved_abs src_real moved_real src_norm moved_norm
+    local q_src_norm q_src_abs q_src_real q_moved_norm q_moved_real
+
+    src_abs=$(realpath -m -- "$src_arg" 2>/dev/null || printf '%s/%s' "$PWD" "$src_arg")
+    dst_abs=$(realpath -m -- "$dst_arg" 2>/dev/null || printf '%s/%s' "$PWD" "$dst_arg")
+
+    src_real=$(realpath -- "$src_abs" 2>/dev/null || printf '%s' "$src_abs")
+    src_norm=$(normalize_cdhist_path "$src_abs")
+
+    if ((dst_was_dir)); then
+        moved_abs="$dst_abs/$(basename -- "$src_abs")"
+    else
+        moved_abs="$dst_abs"
+    fi
+
+    moved_real=$(realpath -- "$moved_abs" 2>/dev/null || return 0)
+    moved_norm=$(normalize_cdhist_path "$moved_abs")
+
+    q_src_norm=$(sql_quote "$src_norm")
+    q_src_abs=$(sql_quote "$src_abs")
+    q_src_real=$(sql_quote "$src_real")
+    q_moved_norm=$(sql_quote "$moved_norm")
+    q_moved_real=$(sql_quote "$moved_real")
+
+    sqlite3 "$cdhist_db" <<EOF >/dev/null 2>&1
+PRAGMA journal_mode=WAL;
+DELETE FROM cd_history
+WHERE realpath='${q_moved_real}' AND realpath<>'${q_src_real}';
+UPDATE cd_history
+SET path='${q_moved_norm}',
+    realpath='${q_moved_real}',
+    display_line=printf(
+        '[%11s] [%5d] %s',
+        strftime('%m.%d %H:%M', last_access, 'unixepoch', 'localtime'),
+        CASE WHEN access_count > 99999 THEN 99999 ELSE access_count END,
+        '${q_moved_norm}'
+    )
+WHERE path IN ('${q_src_norm}', '${q_src_abs}')
+   OR realpath IN ('${q_src_real}', '${q_src_abs}');
+EOF
+}
+
+function mv {
+    local -a args=("$@") path_args=()
+    local arg saw_double_dash=0 has_target_dir=0
+    local src_arg dst_arg src_probe dst_probe
+    local dst_was_dir=0
+    local should_update=0
+    local status
+
+    for arg in "${args[@]}"; do
+        if ((saw_double_dash)); then
+            path_args+=("$arg")
+            continue
+        fi
+
+        if [[ "$arg" == "--" ]]; then
+            saw_double_dash=1
+            continue
+        fi
+
+        case "$arg" in
+        --target-directory|--target-directory=*|-t|-t*)
+            has_target_dir=1
+            ;;
+        esac
+
+        if [[ "$arg" == -* ]]; then
+            continue
+        fi
+        path_args+=("$arg")
+    done
+
+    if ((has_target_dir)) || (( ${#path_args[@]} != 2 )); then
+        command mv "${args[@]}"
+        return $?
+    fi
+
+    src_arg="${path_args[0]}"
+    dst_arg="${path_args[1]}"
+    src_probe=$(realpath -m -- "$src_arg" 2>/dev/null || printf '%s/%s' "$PWD" "$src_arg")
+    dst_probe=$(realpath -m -- "$dst_arg" 2>/dev/null || printf '%s/%s' "$PWD" "$dst_arg")
+    if [[ -d "$src_probe" ]]; then
+        should_update=1
+    fi
+    if [[ -d "$dst_probe" ]]; then
+        dst_was_dir=1
+    fi
+
+    command mv "${args[@]}"
+    status=$?
+    ((status == 0)) || return "$status"
+
+    if ((should_update == 0)); then
+        return 0
+    fi
+
+    update_cdhist_after_move "$src_arg" "$dst_arg" "$dst_was_dir"
+    return 0
+}
+
 cd_widget() {
     # Signal to PROMPT_COMMAND that this is a widget (not a user command).
     # bind -x does not change $?, so without this flag the prompt would inherit
@@ -237,6 +357,15 @@ cd_widget() {
     # Expand ~ to $HOME
     if [[ "$cd_target" == ~* ]]; then
         cd_target="${cd_target/#\~/$HOME}"
+    fi
+
+    # Selected path can become stale after it was recorded.
+    # If directory no longer exists, remove stale DB entry immediately.
+    if [[ ! -d "$cd_target" ]]; then
+        local quoted_target
+        quoted_target=$(sql_quote "$cd_target")
+        sqlite3 "$cdhist_db" "DELETE FROM cd_history WHERE path='${quoted_target}' OR realpath='${quoted_target}';" >/dev/null 2>&1
+        return 1
     fi
 
     # Change directory
