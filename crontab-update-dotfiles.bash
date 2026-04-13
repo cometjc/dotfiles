@@ -45,3 +45,10 @@ if hash tmux 2>/dev/null; then
         fi
     fi
 fi
+
+# Clean up stale entries from cd history database
+if [[ -f "$HOME/.cd_history.db" ]] && command -v sqlite3 >/dev/null 2>&1; then
+    # shellcheck source=files/.bashrc.d/13-cd-hist-plugin
+    source "$DOTFILES_DIR/files/.bashrc.d/13-cd-hist-plugin"
+    cleanup_cdhist
+fi

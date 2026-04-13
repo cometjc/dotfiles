@@ -136,18 +136,62 @@ INSERT OR REPLACE INTO cd_history (realpath, path, last_access, access_count, di
 VALUES ('$(sql_quote "$real_dir")', '$(sql_quote "$current_path")', $new_last_access, $new_access_count, '$(sql_quote "$display_line")');
 EOF
     ) &)
+
 }
 
 cleanup_cdhist() {
-    # Remove entries for directories that no longer exist
-    # Use id for deletion to avoid SQL escaping
-    sqlite3 "$cdhist_db" "SELECT id, realpath FROM cd_history;" | while IFS='|' read -r entry_id realpath; do
-        if ! timeout 0.5 test -d "$realpath" 2>/dev/null; then
-            sqlite3 "$cdhist_db" "DELETE FROM cd_history WHERE id = $entry_id;" >/dev/null 2>&1
-        fi
-    done
+    # Require flock for safe concurrent execution
+    command -v flock >/dev/null || return 0
+    local lockfile="${TMPDIR:-/tmp}/cdhist_cleanup_${USER:-$(id -u)}.lock"
 
-    sqlite3 "$cdhist_db" <<'EOF' >/dev/null 2>&1
+    (
+        # Non-blocking lock: skip if another cleanup instance is already running
+        flock -n 9 || exit 0
+
+        # Launch all existence checks in parallel as background subshells.
+        # Each check writes its exit code to a tmpfile; we collect after a fixed
+        # sleep instead of waiting on individual pids.
+        #
+        # Why not use `timeout test -d`?  timeout(1) sends SIGKILL to the child,
+        # but a process blocked in kernel uninterruptible sleep (D-state, common
+        # with stuck NFS/CIFS mounts) ignores SIGKILL — so timeout itself hangs.
+        # The fix: never call wait on a check that might be stuck.  After the
+        # sleep we only look at the tmpfile; any check still running becomes an
+        # orphan (adopted by init) and does not block us.
+        local -a entry_ids=() paths=() tmpfiles=()
+        while IFS='|' read -r entry_id path; do
+            local tf
+            tf=$(mktemp) || continue
+            entry_ids+=("$entry_id")
+            paths+=("$path")
+            tmpfiles+=("$tf")
+            (test -d "$path" 2>/dev/null; printf '%d\n' $? >"$tf") &
+        done < <(sqlite3 "$cdhist_db" "SELECT id, realpath FROM cd_history;" 2>/dev/null)
+
+        # Give local-FS checks time to finish; network-stuck ones won't complete
+        # within this window and will be skipped (entry kept — safe default).
+        sleep 5
+
+        # Collect results; only delete where check positively returned 1 (not-dir)
+        local -a to_delete=()
+        local i
+        for ((i = 0; i < ${#entry_ids[@]}; i++)); do
+            local tf="${tmpfiles[$i]}"
+            if [[ -s "$tf" ]] && [[ $(< "$tf") -eq 1 ]]; then
+                to_delete+=("${entry_ids[$i]}")
+            fi
+            rm -f "$tf"
+        done
+
+        # Batch delete confirmed non-existent paths in one statement
+        if [[ ${#to_delete[@]} -gt 0 ]]; then
+            local ids
+            printf -v ids '%s,' "${to_delete[@]}"
+            sqlite3 "$cdhist_db" "DELETE FROM cd_history WHERE id IN (${ids%,});" 2>/dev/null
+        fi
+
+        # Trim to 1000 most recent entries
+        sqlite3 "$cdhist_db" <<'EOF' 2>/dev/null
 PRAGMA journal_mode=WAL;
 DELETE FROM cd_history
 WHERE id NOT IN (
@@ -156,8 +200,8 @@ WHERE id NOT IN (
     LIMIT 1000
 );
 EOF
+    ) 9>"$lockfile"
 }
-
 cd_widget() {
     # Signal to PROMPT_COMMAND that this is a widget (not a user command).
     # bind -x does not change $?, so without this flag the prompt would inherit
@@ -193,11 +237,6 @@ cd_widget() {
     # Expand ~ to $HOME
     if [[ "$cd_target" == ~* ]]; then
         cd_target="${cd_target/#\~/$HOME}"
-    fi
-
-    # Cleanup in background (less frequent)
-    if ((RANDOM % 10 == 0)); then
-        (cleanup_cdhist &)
     fi
 
     # Change directory
