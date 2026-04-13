@@ -25,7 +25,6 @@ CREATE INDEX IF NOT EXISTS idx_realpath ON cd_history(realpath);
 CREATE INDEX IF NOT EXISTS idx_last_access ON cd_history(last_access DESC);
 PRAGMA journal_mode=WAL;
 EOF
-    # Add display_line column if it doesn't exist (for migration)
     sqlite3 "$cdhist_db" "ALTER TABLE cd_history ADD COLUMN display_line TEXT;" 2>/dev/null || true
 }
 
@@ -113,11 +112,6 @@ append_cdhist() {
     real_dir=$(realpath "$PWD" 2>/dev/null || echo "$PWD")
     current_path="$PWD"
 
-    # SQLite handles concurrency internally with WAL mode
-    # Run in background silently to avoid blocking cd command
-    # Calculate prerendered display line and save to database
-    # Start the task in a subshell and immediately disown it to prevent job control messages
-    # The initial [1] PID message may still appear, but the Done message will be suppressed
     ( (
         local new_access_count new_last_access relative_time path_display display_line
         # Get new access_count and last_access
@@ -153,9 +147,6 @@ cleanup_cdhist() {
         fi
     done
 
-    # SQLite WAL mode handles concurrency internally, can directly operate on DB
-    # First keep top 1000 entries by last_access, then remove non-existent directories
-    # This reduces the number of directories we need to check
     sqlite3 "$cdhist_db" <<'EOF' >/dev/null 2>&1
 PRAGMA journal_mode=WAL;
 DELETE FROM cd_history
@@ -166,10 +157,6 @@ WHERE id NOT IN (
 );
 EOF
 }
-
-# Global associative array for caching formatted relative times
-# Key: realpath, Value: last_access|formatted_time|access_count
-declare -A _cd_widget_cache
 
 cd_widget() {
     # Signal to PROMPT_COMMAND that this is a widget (not a user command).
@@ -208,7 +195,7 @@ cd_widget() {
         cd_target="${cd_target/#\~/$HOME}"
     fi
 
-    # Cleanup in background (less frequent, SQLite handles concurrency)
+    # Cleanup in background (less frequent)
     if ((RANDOM % 10 == 0)); then
         (cleanup_cdhist &)
     fi
@@ -220,11 +207,6 @@ cd_widget() {
     return 0
 }
 
-# if this is interactive shell, keep Alt+s as a two-step binding:
-# 1. run cd_widget through a bind -x target
-# 2. immediately accept a newline so readline redraws the prompt in the new dir
-# Direct Alt+s -> bind -x skipped that redraw, so the prompt stayed stale until
-# the next command even though PWD had already changed.
 if [[ $- =~ .*i.* ]]; then
     bind -x '"\C-x\C-s": "cd_widget"'
     bind '"\es": "\C-x\C-s\n"'
