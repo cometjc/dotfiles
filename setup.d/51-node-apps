@@ -20,13 +20,45 @@ if command -v node &>/dev/null \
     && command -v bun &>/dev/null \
     && command -v codex &>/dev/null \
     && command -v copilot &>/dev/null \
-    && command -v gemini &>/dev/null; then
-    pass "node, bun, codex, copilot, and gemini are already available, skipping node apps installation"
+    && command -v gemini &>/dev/null \
+    && command -v pm2 &>/dev/null; then
+    pass "node, bun, codex, copilot, gemini, and pm2 are already available, skipping node apps installation"
     exit 0
 fi
 
 ensure_user_owned_dir "$HOME/.cache/mise"
 mise self-update --yes
+
+cleanup_missing_bun_global_path_deps() {
+    local global_pkg_json="$HOME/.bun/install/global/package.json"
+    local global_cwd="$HOME/.bun/install/global"
+    local dep=""
+    local dep_spec=""
+    local dep_path=""
+
+    [[ -f "$global_pkg_json" ]] || return 0
+    command -v jq &>/dev/null || return 0
+
+    while IFS=$'\t' read -r dep dep_spec; do
+        [[ -z "$dep" || -z "$dep_spec" ]] && continue
+
+        dep_path=""
+        if [[ "$dep_spec" == /* ]]; then
+            dep_path="$dep_spec"
+        elif [[ "$dep_spec" == file:* ]]; then
+            dep_path="${dep_spec#file:}"
+            if [[ "$dep_path" != /* ]]; then
+                dep_path="$global_cwd/$dep_path"
+            fi
+        fi
+
+        [[ -z "$dep_path" ]] && continue
+        if [[ ! -e "$dep_path" ]]; then
+            change "Removing broken global bun path dependency: $dep ($dep_spec)"
+            bun remove -g --cwd "$global_cwd" "$dep" || true
+        fi
+    done < <(jq -r '.dependencies // {} | to_entries[] | "\(.key)\t\(.value)"' "$global_pkg_json")
+}
 
 for app in node bun; do
     mise use -g "$app@latest" || {
@@ -35,7 +67,9 @@ for app in node bun; do
     }
 done
 
-for app in @openai/codex @github/copilot @google/gemini-cli; do
+cleanup_missing_bun_global_path_deps
+
+for app in @openai/codex @github/copilot @google/gemini-cli pm2; do
     bun install -g "$app" || {
         fail "Failed to set $app to latest version"
         exit 1
