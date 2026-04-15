@@ -814,7 +814,7 @@ __compal__unmask_alias() {
     fi
 
     ##  decide which unmask function to call;
-    if (("$COMPAL_AUTO_UNMASK" == 1)); then
+    if ((${COMPAL_AUTO_UNMASK:-0} == 1)); then
         __compal__unmask_alias_auto "$@"
     else
         __compal__unmask_alias_manual "$@"
@@ -1041,7 +1041,7 @@ _complete_alias() {
 
 ##  main function;
 __compal__main() {
-    if (("$COMPAL_AUTO_UNMASK" == 1)); then
+    if ((${COMPAL_AUTO_UNMASK:-0} == 1)); then
         ##  save vanilla completions;
         __compal__save_vanilla_cspecs
     fi
