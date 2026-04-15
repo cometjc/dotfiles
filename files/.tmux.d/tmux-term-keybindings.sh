@@ -48,6 +48,12 @@ case "$TERM_NAME" in
         tmux bind-key -n M-Right next-window
         show_keybinding_popup 36 '\n  PuTTY 模式\n  Alt+← / Alt+→  切換 window\n'
         ;;
+    xterm* | rxvt* | alacritty* | foot* | wezterm*)
+        reset_window_switch_bindings
+        tmux bind-key -n M-Left previous-window
+        tmux bind-key -n M-Right next-window
+        show_keybinding_popup 36 '\n  xterm 類模式\n  Alt+← / Alt+→  切換 window\n'
+        ;;
     linux)
         reset_window_switch_bindings
         tmux bind-key -n C-Left previous-window
