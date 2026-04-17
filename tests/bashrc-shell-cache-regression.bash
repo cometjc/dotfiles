@@ -53,9 +53,13 @@ EOF
 chmod +x "$temp_home/.rbenv/bin/rbenv"
 
 hash_key="$(git -C "$repo_root" rev-parse --verify HEAD)"
-if ! git -C "$repo_root" diff --quiet -- files/.bashrc files/.bashrc.d \
-    || ! git -C "$repo_root" diff --cached --quiet -- files/.bashrc files/.bashrc.d; then
-    hash_key="${hash_key}-dirty"
+dirty_diff="$(
+    git -C "$repo_root" diff -- files/.bashrc files/.bashrc.d 2>/dev/null
+    git -C "$repo_root" diff --cached -- files/.bashrc files/.bashrc.d 2>/dev/null
+)"
+if [[ -n "$dirty_diff" ]]; then
+    dirty_hash="$(printf '%s' "$dirty_diff" | sha256sum | cut -c1-16)"
+    hash_key="${hash_key}-${dirty_hash}"
 fi
 shell_cache_file="$temp_home/.cache/dotfiles/bashrc-env/shell-${hash_key}.sh"
 

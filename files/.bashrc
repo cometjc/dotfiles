@@ -38,12 +38,16 @@ _dotfiles_env_cache_should_skip_var() {
 
 _dotfiles_env_cache_init() {
     [[ "${DOTFILES_DISABLE_ENV_CACHE:-0}" == "1" ]] && return 0
-    local base_key dirty_mark=""
+    local base_key dirty_diff dirty_hash dirty_mark=""
     base_key="$(git -C "$DOTFILES_REPO" rev-parse --verify HEAD 2>/dev/null || true)"
     [[ -n "$base_key" ]] || return 0
-    if ! git -C "$DOTFILES_REPO" diff --quiet -- files/.bashrc files/.bashrc.d 2>/dev/null \
-        || ! git -C "$DOTFILES_REPO" diff --cached --quiet -- files/.bashrc files/.bashrc.d 2>/dev/null; then
-        dirty_mark="-dirty"
+    dirty_diff="$(
+        git -C "$DOTFILES_REPO" diff -- files/.bashrc files/.bashrc.d 2>/dev/null
+        git -C "$DOTFILES_REPO" diff --cached -- files/.bashrc files/.bashrc.d 2>/dev/null
+    )"
+    if [[ -n "$dirty_diff" ]]; then
+        dirty_hash="$(printf '%s' "$dirty_diff" | sha256sum | cut -c1-16)"
+        dirty_mark="-${dirty_hash}"
     fi
     DOTFILES_ENV_CACHE_KEY="${base_key}${dirty_mark}"
     DOTFILES_ENV_CACHE_FILE="$DOTFILES_ENV_CACHE_DIR/env-${DOTFILES_ENV_CACHE_KEY}.sh"
