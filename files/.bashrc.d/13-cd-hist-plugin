@@ -375,7 +375,51 @@ cd_widget() {
     return 0
 }
 
+cd_tmux_widget() {
+    _SKIP_CMD_TRACKING=1
+    local cd_target
+
+    if ! tty -s 2>/dev/null; then
+        return 1
+    fi
+
+    if ! command -v fzf >/dev/null 2>&1; then
+        echo "cd_tmux_widget: fzf not found" >&2
+        return 1
+    fi
+
+    cd_target=$(fzf --no-sort --prompt='win> ' < <(
+        sqlite3 "$cdhist_db" "SELECT display_line FROM cd_history WHERE display_line IS NOT NULL ORDER BY last_access DESC, access_count DESC LIMIT 100;"
+    ) 2>/dev/null)
+
+    if [[ -z "$cd_target" ]]; then
+        return 0
+    fi
+
+    cd_target="${cd_target:22}"
+
+    if [[ "$cd_target" == ~* ]]; then
+        cd_target="${cd_target/#\~/$HOME}"
+    fi
+
+    if [[ ! -d "$cd_target" ]]; then
+        local quoted_target
+        quoted_target=$(sql_quote "$cd_target")
+        sqlite3 "$cdhist_db" "DELETE FROM cd_history WHERE path='${quoted_target}' OR realpath='${quoted_target}';" >/dev/null 2>&1
+        return 1
+    fi
+
+    if [[ -n "$TMUX" ]]; then
+        tmux new-window -c "$cd_target"
+    else
+        cd "$cd_target"
+    fi
+    return 0
+}
+
 if [[ $- =~ .*i.* ]]; then
     bind -x '"\C-x\C-s": "cd_widget"'
     bind '"\es": "\C-x\C-s\n"'
+    bind -x '"\C-x\C-k": "cd_tmux_widget"'
+    bind '"\ek": "\C-x\C-k\n"'
 fi
