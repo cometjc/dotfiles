@@ -11,7 +11,7 @@ claude() {
         echo "claude-rec: warning: asciinema not installed, session was not recorded" >&2
         return
     fi
-    asciinema rec --overwrite -c "command claude --dangerously-skip-permissions $*" "$cast_file"
+    asciinema rec --overwrite -c "bash --norc -i -c 'command claude --dangerously-skip-permissions $*'" "$cast_file"
     # Keep only the latest 10 recordings
     ls -t "$cast_dir"/claude-*.cast 2>/dev/null | tail -n +11 | xargs -r rm -f
 }
