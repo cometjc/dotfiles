@@ -12,6 +12,10 @@ export TZ='Asia/Taipei'
 export LANG="en_US.utf8"
 export LANGUAGE="en"
 
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
 # if running bash
 if [ -n "$BASH_VERSION" ]; then
 	# include .bashrc if it exists
