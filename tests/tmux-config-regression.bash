@@ -36,5 +36,9 @@ assert_not_contains "$full_conf" "\$HOME/repo/dotfiles/scripts/tmux-window-statu
     "tmux.conf should not reference the old dotfiles tmux-window-status script directly"
 assert_not_contains "$full_conf" "\$HOME/repo/dotfiles/scripts/tmux-window-render.sh" \
     "tmux.conf should not reference the old dotfiles tmux-window-render script directly"
+assert_not_contains "$full_conf" "tmux-sync-session-width.sh" \
+    "tmux.conf should not keep the old sync-width preview chain in the hot path"
+assert_contains "$full_conf" "#{client_width}" \
+    "tmux.conf should use tmux built-in client width checks for status-right collapsing"
 
 echo "All tmux config regression tests passed"

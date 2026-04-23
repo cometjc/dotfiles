@@ -3,7 +3,6 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 copilot_hooks="$repo_root/.github/hooks/workmux-status/hooks.json"
-sync_width_script="$repo_root/files/.tmux.d/tmux-sync-session-width.sh"
 
 fail() {
     echo "FAIL: $*" >&2
@@ -24,9 +23,5 @@ assert_contains "$copilot_hooks_content" "\$HOME/repo/tmux-agent-status/scripts/
     "Copilot hook config should point at the plugin repo start hook"
 assert_contains "$copilot_hooks_content" "\$HOME/repo/tmux-agent-status/scripts/workmux-hook-done.sh" \
     "Copilot hook config should point at the plugin repo done hook"
-
-sync_width_content="$(cat "$sync_width_script")"
-assert_contains "$sync_width_content" "repo/tmux-agent-status/scripts/tmux-status-left-preview.sh" \
-    "tmux sync-width helper should shell out to the plugin repo preview script"
 
 echo "All tmux agent-status integration regression tests passed"
