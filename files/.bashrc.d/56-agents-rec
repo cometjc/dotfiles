@@ -1,0 +1,57 @@
+#!/bin/bash
+
+__agent_rec_run() {
+    local agent_name="$1"
+    shift
+
+    local rec=false
+    local args=()
+    local arg
+
+    for arg in "$@"; do
+        if [[ "$arg" == "--rec" ]]; then
+            rec=true
+        else
+            args+=("$arg")
+        fi
+    done
+
+    if [[ "$rec" != true ]]; then
+        command "$agent_name" "${args[@]}"
+        return
+    fi
+
+    local cast_dir="/tmp/cast"
+    mkdir -p "$cast_dir"
+
+    local pane_id
+    pane_id=$(tmux display-message -p '#S:#I.#P' 2>/dev/null || echo "notmux")
+
+    local cast_file="$cast_dir/${agent_name}-${pane_id}-$(date +%Y%m%d-%H%M).cast"
+    if ! command -v asciinema >/dev/null 2>&1; then
+        command "$agent_name" "${args[@]}"
+        echo "agents-rec: warning: asciinema not installed, session was not recorded" >&2
+        return
+    fi
+
+    local cmd="command"
+    local quoted
+    printf -v quoted '%q' "$agent_name"
+    cmd+=" $quoted"
+    for arg in "${args[@]}"; do
+        printf -v quoted '%q' "$arg"
+        cmd+=" $quoted"
+    done
+
+    asciinema rec --overwrite -c "$cmd" "$cast_file"
+    # Keep only the latest 10 recordings for each agent.
+    ls -t "$cast_dir"/"${agent_name}"-*.cast 2>/dev/null | tail -n +11 | xargs -r rm -f
+}
+
+claude() {
+    __agent_rec_run claude --dangerously-skip-permissions "$@"
+}
+
+codex() {
+    __agent_rec_run codex --dangerously-bypass-approvals-and-sandbox "$@"
+}
