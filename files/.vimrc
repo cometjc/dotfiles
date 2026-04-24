@@ -574,6 +574,12 @@ function! ToggleColumn()
 	endif
 endfunction
 
+function! SearchCurrentWordInProject()
+	let l:pattern = '\V\<'.escape(expand('<cword>'), '\/').'\>'
+	execute 'vimgrep /'.l:pattern.'/j **/*'
+	cnext
+endfunction
+
 nnoremap <silent> <M-Up>      :call <SID>LocationPrevious()<CR>
 nnoremap <silent> <S-Up>      :call Pre_err()<CR>
 map  <C-Up>      <Plug>(GitGutterPrevHunk)
@@ -593,6 +599,7 @@ nnoremap <silent> <Esc>[1;2B :call Next_err()<CR>
 nnoremap <silent> <Esc>O2A   :call Pre_err()<CR>
 nnoremap <silent> <Esc>O2B   :call Next_err()<CR>
 map  <C-B>       :call Do_make__()<CR>|                  " excute make in vim and open quickfix window
+nnoremap <silent> <C-\>       :call SearchCurrentWordInProject()<CR>
 map  <C-F4>      :bd<CR>
 map  <C-F7>      :silent gr '<c-r>=expand('<cword>')<CR>' .\|redraw!<CR>
 map  <C-H>       :%s/\V\<<c-r>=expand('<cword>')<CR>\>///g<left><left>
