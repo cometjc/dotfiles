@@ -18,11 +18,11 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 
 # if running bash
 if [ -n "$BASH_VERSION" ]; then
-	# include .bashrc if it exists
-	if [ -f "$HOME/.bashrc" ]; then
-		export BPATH="$PATH"
-		. "$HOME/.bashrc"
-	fi
+    # include .bashrc if it exists
+    if [ -f "$HOME/.bashrc" ]; then
+        export BPATH="$PATH"
+        . "$HOME/.bashrc"
+    fi
 fi
 
 export XMODIFIERS=@im=fcitx
@@ -32,3 +32,7 @@ export QT_IM_MODULE=fcitx
 if [ -e $HOME/.nix-profile/etc/profile.d/nix.sh ]; then . $HOME/.nix-profile/etc/profile.d/nix.sh; fi # added by Nix installer
 
 . "$HOME/.local/bin/env"
+
+if [ -e "$HOME/.autuin/bin/env" ]; then
+    . "$HOME/.atuin/bin/env"
+fi

@@ -35,7 +35,6 @@ case $platform in
         # Define Linux-specific packages
         packages+=(
             # shell tools
-            hstr
             vim
             wget
             curl
