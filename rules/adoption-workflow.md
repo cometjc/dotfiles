@@ -12,7 +12,7 @@
 ### 1. Inspect the baseline delta
 
 - 已有同步基線：查看 baseline diff 與 commit message。
-- 尚無同步基線：全量閱讀 `AGENTS.md` 與 `ai-rules/` 的正式章節。
+- 尚無同步基線：全量閱讀 `AGENTS.md` 與 `rules/` 的正式章節。
 
 ### 2. Turn changes into adoption items
 
@@ -26,7 +26,7 @@
 
 ### 4. Integrate locally
 
-- 將採納結果映射回本地 `AGENTS.md`、`ai-rules/`、skill、script 或既有文件。
+- 將採納結果映射回本地 `AGENTS.md`、`rules/`、skill、script 或既有文件。
 - 若本地已有文件覆蓋相同主題，優先整併進既有落點，而不是平行新增近似檔案。
 
 ### 5. Update the baseline

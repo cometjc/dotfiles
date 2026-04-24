@@ -3,7 +3,7 @@
 ## 核心要求
 
 - 每次收斂出可重複沿用的改善時，先判斷它屬於治理規則、情境 workflow、機械步驟，還是低頻知識/證據。
-- 高頻、可泛化、跨案例的治理要求，放進本地 `AGENTS.md` 或被它索引的 `ai-rules/` 章節。
+- 高頻、可泛化、跨案例的治理要求，放進本地 `AGENTS.md` 或被它索引的 `rules/` 章節。
 - 有 trigger、決策節點、續作順序與 exit criteria 的 workflow，放進 skill。
 - 輸入輸出明確、值得自動化的機械步驟，放進 `scripts/`。
 - 低頻但關鍵的排障知識、證據與查表資訊，放進 runbook 或其他 context 落點，而不是堆進 `AGENTS.md`。

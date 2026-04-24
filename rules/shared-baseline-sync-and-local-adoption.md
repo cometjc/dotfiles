@@ -16,6 +16,6 @@
 ## 驗證方式
 
 - 檢查 `AGENTS.md` 是否能獨立說明本專案的規則入口與核心章節。
-- 檢查保留的 `ai-rules/*.md` 是否都是 `AGENTS.md` 索引的正式章節。
+- 檢查保留的 `rules/*.md` 是否都是 `AGENTS.md` 索引的正式章節。
 - 檢查同步流程是否明確要求同時查看 baseline diff 與 commit message。
 - 檢查 `adopted/<project>` baseline branch 的更新時機是否落在本地採納完成之後。
