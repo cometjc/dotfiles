@@ -7,4 +7,4 @@ export HISTSIZE=${HISTFILESIZE} # increase history size (default is 500)
 . "$HOME/.atuin/bin/env"
 
 [[ -f ~/.bash-preexec.sh ]] && source $HOME/.bash-preexec.sh
-eval "$(atuin init bash)"
+eval "$(atuin init bash --disable-up-arrow)"
