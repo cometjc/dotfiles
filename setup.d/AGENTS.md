@@ -56,3 +56,7 @@ fi
 - 若 script 會安裝設定檔/資源檔，`required_files` 是否完整覆蓋？
 - Skip 判斷是否只出現在 `all_targets_ready=true` 的分支？
 - 缺前置時是否為 `fail + exit 1`（不是 `pass` / `exit 0`）？
+
+## Node 全域工具
+
+- 在 `setup.d` 內安裝 Node 全域 CLI 時，預設使用 `bun`，不要新增 `npm install -g ...`。

@@ -19,10 +19,11 @@ fi
 if command -v node &>/dev/null \
     && command -v bun &>/dev/null \
     && command -v codex &>/dev/null \
+    && command -v cf &>/dev/null \
     && command -v copilot &>/dev/null \
     && command -v gemini &>/dev/null \
     && command -v pm2 &>/dev/null; then
-    pass "node, bun, codex, copilot, gemini, and pm2 are already available, skipping node apps installation"
+    pass "node, bun, codex, cf, copilot, gemini, and pm2 are already available, skipping node apps installation"
     exit 0
 fi
 
@@ -75,3 +76,8 @@ for app in @openai/codex @github/copilot @google/gemini-cli pm2; do
         exit 1
     }
 done
+
+bun install -g cf || {
+    fail "Failed to install cf"
+    exit 1
+}
