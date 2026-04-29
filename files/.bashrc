@@ -257,32 +257,38 @@ fi
 # import scripts
 #-------------------------------------------------------------
 include_scripts() {
-    YELLOW=$(tput setaf 3)
-    CYAN=$(tput setaf 6)
-    RED=$(tput setaf 1)
-    RESET=$(tput sgr0)
-    find "$HOME"/.bashrc.d/ -name '*~' -delete
+    # one-shot cleanup of editor backups; cheap, single fork
+    find "$HOME"/.bashrc.d/ -name '*~' -delete 2>/dev/null
     # /etc/bashrc need to run after bashrc.d
-    local bashrc_list
-    mapfile -t bashrc_list < <(find ~/.bashrc.d/ -name '[^.]*' -type f -print0 | xargs -r -0 ls -1 | sort)
-    # disable errexit
-    local reset
+    local file name reset
+    local files=("$HOME"/.bashrc.d/*)
     reset=$(shopt -p -o errexit)
     shopt -u -o errexit
-    # save stderr
-    exec 8>&2 7>&1
-    exec 2>&1
-    for file in "${bashrc_list[@]}"; do
-        if [ -f "$file" ]; then
-            name=$(basename "$file")
+    if [[ -n "${BASHRC_DEBUG:-}" ]]; then
+        local YELLOW CYAN RED RESET
+        YELLOW=$(tput setaf 3)
+        CYAN=$(tput setaf 6)
+        RED=$(tput setaf 1)
+        RESET=$(tput sgr0)
+        # save stderr
+        exec 8>&2 7>&1
+        exec 2>&1
+        for file in "${files[@]}"; do
+            [[ -f "$file" ]] || continue
+            name=${file##*/}
             echo -e "${YELLOW}[Sourcing] ${name}${RESET}"
             # shellcheck source=/dev/null
             source "$file" > >(sed -E "s/(.*)/  ${CYAN}${name}: &${RESET}/") 2> >(sed -E "s/(.*)/  ${RED}${name}: &${RESET}/" >&2)
-        fi
-    done
-    # restore stderr
-    exec 2>&8 1>&7 8>&- 7>&-
-    # restore errexit
+        done
+        # restore stderr
+        exec 2>&8 1>&7 8>&- 7>&-
+    else
+        for file in "${files[@]}"; do
+            [[ -f "$file" ]] || continue
+            # shellcheck source=/dev/null
+            source "$file"
+        done
+    fi
     eval "$reset"
 }
 
@@ -293,7 +299,6 @@ alias tm='task-master'
 alias taskmaster='task-master'
 # shellcheck source=/dev/null
 source "$HOME/repo/sre/bashrc"
-eval "$(direnv hook bash)"
 
 # Added by `rbenv init` on 西元2025年08月20日 (週三) 10時26分09秒 CST
 eval "$(~/.rbenv/bin/rbenv init - --no-rehash bash)"
@@ -316,3 +321,5 @@ if [[ -f "$HOME/.local/bin/env" ]]; then
     # shellcheck source=/dev/null
     . "$HOME/.local/bin/env"
 fi
+# CF CLI completions
+[[ -f "/home/jethro/.config/cf/completions/cf.bash" ]] && source "/home/jethro/.config/cf/completions/cf.bash"

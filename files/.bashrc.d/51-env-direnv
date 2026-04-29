@@ -10,6 +10,18 @@ if declare -p chpwd_functions >/dev/null 2>&1 && ! array_contains chpwd_function
     chpwd_functions+=(_shared_envrc_sync_on_chpwd)
 fi
 
-eval "$(direnv hook bash)"
+if command -v direnv >/dev/null 2>&1; then
+    _bashrc_cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/bashrc"
+    _direnv_hook_cache="${_bashrc_cache_dir}/direnv-hook.bash"
+    _direnv_bin="$(command -v direnv)"
+    if [[ ! -s "$_direnv_hook_cache" || "$_direnv_bin" -nt "$_direnv_hook_cache" ]]; then
+        mkdir -p "$_bashrc_cache_dir"
+        direnv hook bash >"$_direnv_hook_cache"
+    fi
+    # shellcheck source=/dev/null
+    source "$_direnv_hook_cache"
+fi
 
-_shared_envrc_sync_on_chpwd
+if [[ -e "$PWD/.envrc" || -e "$PWD/.envrc.shared" || -e "$PWD/.envrc.local" ]]; then
+    _shared_envrc_sync_on_chpwd
+fi

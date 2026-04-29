@@ -1,5 +1,12 @@
 #!/bin/bash
 
-eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv | grep -v PATH+)"
-PATH_append "/home/linuxbrew/.linuxbrew/bin"
-PATH_append "/home/linuxbrew/.linuxbrew/sbin"
+HOMEBREW_PREFIX="/home/linuxbrew/.linuxbrew"
+if [[ -d "$HOMEBREW_PREFIX" ]]; then
+    export HOMEBREW_PREFIX
+    export HOMEBREW_CELLAR="${HOMEBREW_PREFIX}/Cellar"
+    export HOMEBREW_REPOSITORY="${HOMEBREW_PREFIX}/Homebrew"
+    export INFOPATH="${HOMEBREW_PREFIX}/share/info:${INFOPATH:-}"
+    export PATH="${HOMEBREW_PREFIX}/bin:${HOMEBREW_PREFIX}/sbin${PATH+:${PATH}}"
+    # Keep brew shellenv behavior: only normalize MANPATH when it already exists.
+    [[ -z "${MANPATH-}" ]] || export MANPATH=":${MANPATH#:}"
+fi

@@ -1,7 +1,17 @@
 #!/bin/bash
 
 if ! array_contains chpwd_functions _mise_hook; then
-    eval "$(mise activate bash)"
+    if command -v mise >/dev/null 2>&1; then
+        _bashrc_cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/bashrc"
+        _mise_activate_cache="${_bashrc_cache_dir}/mise-activate.bash"
+        _mise_bin="$(command -v mise)"
+        if [[ ! -s "$_mise_activate_cache" || "$_mise_bin" -nt "$_mise_activate_cache" ]]; then
+            mkdir -p "$_bashrc_cache_dir"
+            mise activate bash >"$_mise_activate_cache"
+        fi
+        # shellcheck source=/dev/null
+        source "$_mise_activate_cache"
+    fi
 fi
 
 alias oco='$HOME/.bin/oco'
