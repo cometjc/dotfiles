@@ -8,6 +8,7 @@ path_list=(
     "${KREW_ROOT:-$HOME/.krew}/bin" # plugin manager for kubectl
     "$HOME/bin/gam7"                # Google Apps Manager
     "$HOME/.local/share/JetBrains/Toolbox/apps"
+    "$HOME/.atuin/bin"
     /usr/local/go/bin
     /usr/local/bin
 )
