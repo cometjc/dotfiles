@@ -6,6 +6,7 @@
 /.workmux.yaml
 /.claude
 /.worktrees
+/.cursor/index.mdc
 
 *.pyc
 .tags*
