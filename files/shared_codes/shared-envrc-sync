@@ -6,6 +6,7 @@ DISPATCHER_MARKER="shared-envrc-dispatcher"
 RUNNER_MARKER="shared-envrc-hook-runner"
 STATE_SUBDIR="user-global-envrc"
 SHARED_ENVRC_PATH="${SHARED_ENVRC_SHARED_FILE:-$HOME/shared_codes/.envrc}"
+UPGRADE_GATE_SCHEMA_VERSION="${SHARED_ENVRC_UPGRADE_GATE_VERSION:-20260430}"
 
 usage() {
     cat <<'EOF'
@@ -16,6 +17,14 @@ Commands:
   ensure-hooks
   mark-dirty <hook-name>
   install-templates
+
+Environment (sync-on-enter):
+  SHARED_ENVRC_LOCAL_DIVERGED_POLICY  when repo .envrc differs from base but
+                                    ~/shared_codes/.envrc matches base:
+                                    overwrite-local (default) — replace .envrc
+                                    keep-local — leave .envrc as-is
+  SHARED_ENVRC_SYNC_QUIET_NOOP        set to 1 to suppress routine no-op stderr
+  SHARED_ENVRC_SHARED_FILE            path to shared template (default ~/shared_codes/.envrc)
 EOF
 }
 
@@ -93,6 +102,30 @@ same_file() {
     local left="$1"
     local right="$2"
     cmp -s "$left" "$right"
+}
+
+extract_schema_version() {
+    local file="$1"
+    [[ -f "$file" ]] || {
+        printf '0\n'
+        return 0
+    }
+    local line
+    line="$(rg -n --no-heading '^\s*export\s+SHARED_ENVRC_SCHEMA_VERSION=' "$file" 2>/dev/null | head -n 1 || true)"
+    if [[ -z "$line" ]]; then
+        printf '0\n'
+        return 0
+    fi
+    line="${line#*:}"
+    line="${line#*=}"
+    line="${line//\"/}"
+    line="${line//\'/}"
+    line="${line// /}"
+    if [[ "$line" =~ ^[0-9]+$ ]]; then
+        printf '%s\n' "$line"
+    else
+        printf '0\n'
+    fi
 }
 
 write_dispatcher() {
@@ -260,7 +293,7 @@ resolve_conflict() {
 }
 
 sync_on_enter() {
-    local root local_file base shared merged merge_status=0 was_managed=0
+    local root local_file base shared merged merge_status=0 was_managed=0 local_schema=0
     root="$(repo_root)" || return 0
     local_file="$root/.envrc"
     [[ -f "$local_file" ]] || return 0
@@ -272,6 +305,16 @@ sync_on_enter() {
     ((skip_permanently == 0)) || return 0
 
     ensure_hooks
+
+    local_schema="$(extract_schema_version "$local_file")"
+    if ((local_schema >= UPGRADE_GATE_SCHEMA_VERSION)); then
+        load_state
+        dirty=0
+        managed=1
+        write_state
+        log_noop_status "already managed, no updates needed"
+        return 0
+    fi
 
     if [[ ! -f "$(base_file)" ]]; then
         cp "$SHARED_ENVRC_PATH" "$(base_file)"
@@ -298,16 +341,38 @@ sync_on_enter() {
     fi
 
     if same_file "$shared" "$base"; then
-        load_state
-        dirty=0
-        managed=1
-        write_state
-        if ((was_managed == 0)); then
-            log_status "now managing this repo"
-        else
-            log_noop_status "already managed, no updates needed"
-        fi
-        return 0
+        # local != base && shared == base: repo .envrc drifted while template unchanged
+        local diverge_policy="${SHARED_ENVRC_LOCAL_DIVERGED_POLICY:-overwrite-local}"
+        case "$diverge_policy" in
+            keep-local)
+                load_state
+                dirty=0
+                managed=1
+                write_state
+                if ((was_managed == 0)); then
+                    log_status "now managing this repo"
+                else
+                    log_noop_status "already managed, no updates needed"
+                fi
+                return 0
+                ;;
+            overwrite-local)
+                cp "$shared" "$local_file"
+                cp "$shared" "$base"
+                load_state
+                dirty=0
+                managed=1
+                write_state
+                if ((was_managed == 0)); then
+                    log_status "now managing this repo"
+                fi
+                log_status "overwrote repo .envrc with shared template (local had drifted). Set SHARED_ENVRC_LOCAL_DIVERGED_POLICY=keep-local to preserve local-only changes."
+                return 0
+                ;;
+            *)
+                die "unknown SHARED_ENVRC_LOCAL_DIVERGED_POLICY: $diverge_policy (use overwrite-local or keep-local)"
+                ;;
+        esac
     fi
 
     merged="$(mktemp)"

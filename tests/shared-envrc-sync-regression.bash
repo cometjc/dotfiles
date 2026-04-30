@@ -119,6 +119,122 @@ EOF
         "sync-on-enter should announce the no-op case for an already managed repo"
 }
 
+test_sync_on_enter_overwrites_local_when_shared_unchanged_by_default() {
+    local temp_home temp_repo
+    temp_home="$(mktemp -d)"
+    temp_repo="$(create_temp_repo)"
+    trap 'rm -rf "$temp_home" "$temp_repo"' RETURN
+
+    mkdir -p "$temp_home/shared_codes" "$temp_repo/.git/user-global-envrc"
+    cat >"$temp_home/shared_codes/.envrc" <<'EOF'
+export SHARED_VERSION=1
+EOF
+    cat >"$temp_repo/.git/user-global-envrc/base.envrc" <<'EOF'
+export SHARED_VERSION=1
+EOF
+    cat >"$temp_repo/.envrc" <<'EOF'
+export SHARED_VERSION=1
+export LOCAL_ONLY=1
+EOF
+    cat >"$temp_repo/.git/user-global-envrc/state" <<'EOF'
+skip_permanently=0
+dirty=0
+managed=1
+EOF
+
+    (
+        cd "$temp_repo"
+        HOME="$temp_home" "$sync_script" sync-on-enter >/tmp/shared-envrc-sync-drift.out 2>/tmp/shared-envrc-sync-drift.err
+    ) || {
+        cat /tmp/shared-envrc-sync-drift.err >&2
+        fail "sync-on-enter should succeed when local .envrc drifted but shared is unchanged"
+    }
+
+    assert_file_contains "$temp_repo/.envrc" "export SHARED_VERSION=1" \
+        "sync-on-enter should reset .envrc to match shared when policy defaults to overwrite-local"
+    if grep -q 'export LOCAL_ONLY=1' "$temp_repo/.envrc"; then
+        fail "sync-on-enter should remove local-only drift lines after overwrite-local"
+    fi
+    assert_file_contains /tmp/shared-envrc-sync-drift.err "overwrote repo .envrc" \
+        "sync-on-enter should announce overwrite when local drifted"
+    assert_file_contains /tmp/shared-envrc-sync-drift.err "SHARED_ENVRC_LOCAL_DIVERGED_POLICY=keep-local" \
+        "sync-on-enter should hint how to opt into keep-local"
+}
+
+test_sync_on_enter_respects_keep_local_when_shared_unchanged() {
+    local temp_home temp_repo
+    temp_home="$(mktemp -d)"
+    temp_repo="$(create_temp_repo)"
+    trap 'rm -rf "$temp_home" "$temp_repo"' RETURN
+
+    mkdir -p "$temp_home/shared_codes" "$temp_repo/.git/user-global-envrc"
+    cat >"$temp_home/shared_codes/.envrc" <<'EOF'
+export SHARED_VERSION=1
+EOF
+    cat >"$temp_repo/.git/user-global-envrc/base.envrc" <<'EOF'
+export SHARED_VERSION=1
+EOF
+    cat >"$temp_repo/.envrc" <<'EOF'
+export SHARED_VERSION=1
+export LOCAL_ONLY=1
+EOF
+    cat >"$temp_repo/.git/user-global-envrc/state" <<'EOF'
+skip_permanently=0
+dirty=0
+managed=1
+EOF
+
+    (
+        cd "$temp_repo"
+        HOME="$temp_home" SHARED_ENVRC_LOCAL_DIVERGED_POLICY=keep-local \
+            "$sync_script" sync-on-enter >/tmp/shared-envrc-sync-keep.out 2>/tmp/shared-envrc-sync-keep.err
+    ) || {
+        cat /tmp/shared-envrc-sync-keep.err >&2
+        fail "sync-on-enter should succeed when keep-local policy is set"
+    }
+
+    assert_file_contains "$temp_repo/.envrc" "export LOCAL_ONLY=1" \
+        "sync-on-enter should leave drifted .envrc when SHARED_ENVRC_LOCAL_DIVERGED_POLICY=keep-local"
+    if grep -q 'overwrote repo .envrc' /tmp/shared-envrc-sync-keep.err; then
+        fail "sync-on-enter should not announce overwrite when keep-local is set"
+    fi
+}
+
+test_sync_on_enter_overwrite_logs_even_when_quiet_noop() {
+    local temp_home temp_repo
+    temp_home="$(mktemp -d)"
+    temp_repo="$(create_temp_repo)"
+    trap 'rm -rf "$temp_home" "$temp_repo"' RETURN
+
+    mkdir -p "$temp_home/shared_codes" "$temp_repo/.git/user-global-envrc"
+    cat >"$temp_home/shared_codes/.envrc" <<'EOF'
+export SHARED_VERSION=1
+EOF
+    cat >"$temp_repo/.git/user-global-envrc/base.envrc" <<'EOF'
+export SHARED_VERSION=1
+EOF
+    cat >"$temp_repo/.envrc" <<'EOF'
+export DRIFT=1
+EOF
+    cat >"$temp_repo/.git/user-global-envrc/state" <<'EOF'
+skip_permanently=0
+dirty=0
+managed=1
+EOF
+
+    (
+        cd "$temp_repo"
+        HOME="$temp_home" SHARED_ENVRC_SYNC_QUIET_NOOP=1 \
+            "$sync_script" sync-on-enter >/tmp/shared-envrc-sync-quiet-over.out 2>/tmp/shared-envrc-sync-quiet-over.err
+    ) || {
+        cat /tmp/shared-envrc-sync-quiet-over.err >&2
+        fail "sync-on-enter should succeed when quiet no-op is set but overwrite runs"
+    }
+
+    assert_file_contains /tmp/shared-envrc-sync-quiet-over.err "overwrote repo .envrc" \
+        "overwrite notice should not be suppressed by SHARED_ENVRC_SYNC_QUIET_NOOP"
+}
+
 test_sync_on_enter_can_suppress_noop_message() {
     local temp_home temp_repo
     temp_home="$(mktemp -d)"
@@ -338,6 +454,9 @@ EOF
 test_sync_on_enter_auto_updates_when_only_shared_changes
 test_sync_on_enter_prints_message_when_repo_becomes_managed
 test_sync_on_enter_prints_message_when_repo_is_already_managed
+test_sync_on_enter_overwrites_local_when_shared_unchanged_by_default
+test_sync_on_enter_respects_keep_local_when_shared_unchanged
+test_sync_on_enter_overwrite_logs_even_when_quiet_noop
 test_sync_on_enter_can_suppress_noop_message
 test_sync_on_enter_skips_forever_when_repo_is_remembered
 test_sync_on_enter_overwrites_local_after_conflict_choice

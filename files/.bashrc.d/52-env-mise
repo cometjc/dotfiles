@@ -1,7 +1,15 @@
 #!/bin/bash
 
-if ! array_contains chpwd_functions _mise_hook; then
-    if command -v mise >/dev/null 2>&1; then
+if command -v mise >/dev/null 2>&1; then
+    _need_mise_activate=0
+    if ! array_contains chpwd_functions _mise_hook && ! array_contains chpwd_functions _mise_hook_chpwd; then
+        _need_mise_activate=1
+    elif ! declare -F _mise_hook >/dev/null && ! declare -F _mise_hook_chpwd >/dev/null; then
+        # stale hook names may survive in chpwd_functions while hook functions are missing
+        _need_mise_activate=1
+    fi
+
+    if [[ $_need_mise_activate -eq 1 ]]; then
         _bashrc_cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/bashrc"
         _mise_activate_cache="${_bashrc_cache_dir}/mise-activate.bash"
         _mise_bin="$(command -v mise)"
